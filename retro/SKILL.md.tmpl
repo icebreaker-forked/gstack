@@ -170,9 +170,9 @@ If TODOS.md doesn't exist, skip the Backlog Health row.
 
 If the JSONL file doesn't exist or has no entries in the window, skip the Skill Usage row.
 
-### Step 3: Commit Time Distribution
+### Step 3：提交时间分布
 
-Show hourly histogram in local time using bar chart:
+用本地时间绘制按小时分布的柱状图：
 
 ```
 Hour  Commits  ████████████████
@@ -181,32 +181,32 @@ Hour  Commits  ████████████████
  ...
 ```
 
-Identify and call out:
-- Peak hours
-- Dead zones
-- Whether pattern is bimodal (morning/evening) or continuous
-- Late-night coding clusters (after 10pm)
+并指出：
+- 高峰时段
+- 低谷时段
+- 模式是双峰（早晚各一波）还是连续分布
+- 是否存在明显的深夜编码集中段（晚上 10 点之后）
 
-### Step 4: Work Session Detection
+### Step 4：工作会话识别
 
-Detect sessions using **45-minute gap** threshold between consecutive commits. For each session report:
-- Start/end time (Pacific)
-- Number of commits
-- Duration in minutes
+使用**45 分钟间隔阈值**把连续 commit 划分成不同 session。对每个 session 都要报告：
+- 开始 / 结束时间（使用本地时间）
+- commit 数
+- 持续时长（分钟）
 
-Classify sessions:
-- **Deep sessions** (50+ min)
-- **Medium sessions** (20-50 min)
-- **Micro sessions** (<20 min, typically single-commit fire-and-forget)
+再把 session 分成：
+- **Deep sessions**（50 分钟以上）
+- **Medium sessions**（20-50 分钟）
+- **Micro sessions**（20 分钟以下，通常是一两个快速提交）
 
-Calculate:
-- Total active coding time (sum of session durations)
-- Average session length
-- LOC per hour of active time
+并计算：
+- 总活跃编码时长（session 时长总和）
+- 平均 session 长度
+- 每小时活跃时间内的 LOC 产出
 
-### Step 5: Commit Type Breakdown
+### Step 5：提交类型拆分
 
-Categorize by conventional commit prefix (feat/fix/refactor/test/chore/docs). Show as percentage bar:
+按 conventional commit 前缀分类（feat / fix / refactor / test / chore / docs），并用百分比条展示：
 
 ```
 feat:     20  (40%)  ████████████████████
@@ -214,48 +214,48 @@ fix:      27  (54%)  ███████████████████�
 refactor:  2  ( 4%)  ██
 ```
 
-Flag if fix ratio exceeds 50% — this signals a "ship fast, fix fast" pattern that may indicate review gaps.
+如果 fix 占比超过 50%，要明确标出来。这通常意味着“先快速发，再快速补”的模式，背后可能存在 review 缺口。
 
-### Step 6: Hotspot Analysis
+### Step 6：热点文件分析
 
-Show top 10 most-changed files. Flag:
-- Files changed 5+ times (churn hotspots)
-- Test files vs production files in the hotspot list
-- VERSION/CHANGELOG frequency (version discipline indicator)
+展示变更最频繁的前 10 个文件，并标记：
+- 被改动 5 次以上的文件（高 churn 热点）
+- 热点列表里测试文件与生产文件的比例
+- `VERSION` / `CHANGELOG` 出现频率（版本纪律的信号）
 
-### Step 7: PR Size Distribution
+### Step 7：PR 规模分布
 
-From commit diffs, estimate PR sizes and bucket them:
-- **Small** (<100 LOC)
-- **Medium** (100-500 LOC)
-- **Large** (500-1500 LOC)
-- **XL** (1500+ LOC) — flag these with file counts
+从 commit diff 粗略估算 PR 体量，并按以下区间分桶：
+- **Small**（<100 LOC）
+- **Medium**（100-500 LOC）
+- **Large**（500-1500 LOC）
+- **XL**（1500+ LOC）——这类要额外标出涉及文件数
 
-### Step 8: Focus Score + Ship of the Week
+### Step 8：Focus Score + Ship of the Week
 
-**Focus score:** Calculate the percentage of commits touching the single most-changed top-level directory (e.g., `app/services/`, `app/views/`). Higher score = deeper focused work. Lower score = scattered context-switching. Report as: "Focus score: 62% (app/services/)"
+**Focus score：** 计算有多少 commit 触碰了“最常被改动的顶层目录”（例如 `app/services/`、`app/views/`）。分数越高，表示工作越集中；越低，则说明上下文切换更散。输出格式例如：`"Focus score: 62% (app/services/)"`
 
-**Ship of the week:** Auto-identify the single highest-LOC PR in the window. Highlight it:
-- PR number and title
-- LOC changed
-- Why it matters (infer from commit messages and files touched)
+**Ship of the week：** 自动识别当前时间窗口里 LOC 最大的一次 ship / PR，并重点展示：
+- PR 编号和标题
+- 变更 LOC
+- 为什么它重要（根据 commit message 和变更文件做推断）
 
-### Step 9: Team Member Analysis
+### Step 9：团队成员分析
 
-For each contributor (including the current user), compute:
+对每个贡献者（包括当前用户），都要计算：
 
-1. **Commits and LOC** — total commits, insertions, deletions, net LOC
-2. **Areas of focus** — which directories/files they touched most (top 3)
-3. **Commit type mix** — their personal feat/fix/refactor/test breakdown
-4. **Session patterns** — when they code (their peak hours), session count
-5. **Test discipline** — their personal test LOC ratio
-6. **Biggest ship** — their single highest-impact commit or PR in the window
+1. **Commits and LOC** —— 总提交数、insertions、deletions、净 LOC
+2. **Areas of focus** —— 他们最常改的目录 / 文件（前 3）
+3. **Commit type mix** —— 他们个人的 feat / fix / refactor / test 分布
+4. **Session patterns** —— 他们通常何时编码（高峰时段）、session 数量
+5. **Test discipline** —— 他们个人的测试 LOC 比例
+6. **Biggest ship** —— 当前窗口内他们影响最大的一次提交或 PR
 
-**For the current user ("You"):** This section gets the deepest treatment. Include all the detail from the solo retro — session analysis, time patterns, focus score. Frame it in first person: "Your peak hours...", "Your biggest ship..."
+**对于当前用户（“You”）：** 这一部分要写得最深入。把单人 retro 中该有的细节都带上，例如 session 分析、时间模式、focus score。叙述上要以 “Your peak hours...” / “Your biggest ship...” 这样的方式组织。
 
-**For each teammate:** Write 2-3 sentences covering what they worked on and their pattern. Then:
+**对于每个队友：** 用 2-3 句话概述他们主要做了什么、呈现出什么工作模式。然后：
 
-- **Praise** (1-2 specific things): Anchor in actual commits. Not "great work" — say exactly what was good. Examples: "Shipped the entire auth middleware rewrite in 3 focused sessions with 45% test coverage", "Every PR under 200 LOC — disciplined decomposition."
+- **Praise**（1-2 个具体点）：必须锚定在真实提交上。不要泛泛地说 “great work”，而是明确说清哪里做得好。例如：“在 3 个高度集中的 session 里完成整个 auth middleware 重写，并保持了 45% 测试覆盖”“所有 PR 都控制在 200 LOC 以内，拆分纪律很好。”
 - **Opportunity for growth** (1 specific thing): Frame as a leveling-up suggestion, not criticism. Anchor in actual data. Examples: "Test ratio was 12% this week — adding test coverage to the payment module before it gets more complex would pay off", "5 fix commits on the same file suggest the original PR could have used a review pass."
 
 **If only one contributor (solo repo):** Skip the team breakdown and proceed as before — the retro is personal.

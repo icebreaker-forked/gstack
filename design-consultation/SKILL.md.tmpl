@@ -84,20 +84,20 @@ ls .context/*office-hours* .context/attachments/*office-hours* 2>/dev/null | hea
 
 ---
 
-## Phase 2: Research (only if user said yes)
+## Phase 2：研究（仅当用户选择需要时）
 
-If the user wants competitive research:
+如果用户希望做竞品或同类产品研究：
 
-**Step 1: Identify what's out there via WebSearch**
+**Step 1：先通过 WebSearch 了解市场上都有哪些东西**
 
-Use WebSearch to find 5-10 products in their space. Search for:
+用 WebSearch 找出该领域内 5-10 个相关产品。可搜索：
 - "[product category] website design"
 - "[product category] best websites 2025"
 - "best [industry] web apps"
 
-**Step 2: Visual research via browse (if available)**
+**Step 2：如果 browse 可用，就做视觉研究**
 
-If the browse binary is available (`$B` is set), visit the top 3-5 sites in the space and capture visual evidence:
+如果 browse 二进制可用（即 `$B` 已设置），就访问该领域内最值得参考的 3-5 个网站，并截取视觉证据：
 
 ```bash
 $B goto "https://example-site.com"
@@ -105,33 +105,33 @@ $B screenshot "/tmp/design-research-site-name.png"
 $B snapshot
 ```
 
-For each site, analyze: fonts actually used, color palette, layout approach, spacing density, aesthetic direction. The screenshot gives you the feel; the snapshot gives you structural data.
+对每个站点，至少分析这些内容：实际使用的字体、色板、布局方式、间距密度、总体审美方向。截图帮助你把握“感觉”，snapshot 帮你抓结构。
 
-If a site blocks the headless browser or requires login, skip it and note why.
+如果某站点阻止无头浏览器访问，或必须登录才能看，就跳过，并说明原因。
 
-If browse is not available, rely on WebSearch results and your built-in design knowledge — this is fine.
+如果 browse 不可用，就依赖 WebSearch 结果和你自身的设计知识继续，这没有问题。
 
-**Step 3: Synthesize findings**
+**Step 3：综合研究结果**
 
-The goal of research is NOT to copy. It is to get in the ballpark — to understand the visual language users in this category already expect. This gives you the baseline. The interesting design work starts after you have the baseline: deciding where to follow conventions (so the product feels literate) and where to break from them (so the product is memorable).
+研究的目的**不是照抄**，而是先进入正确语境：理解这个类别的用户已经习惯了什么视觉语言。这给你一个 baseline。真正有意思的设计工作，是在 baseline 之上决定：哪些地方遵循行业共识（让产品显得“懂行”），哪些地方故意偏离（让产品真正被记住）。
 
-Summarize conversationally:
+用对话式语言做总结：
 > "I looked at what's out there. Here's the landscape: they converge on [patterns]. Most of them feel [observation — e.g., interchangeable, polished but generic, etc.]. The opportunity to stand out is [gap]. Here's where I'd play it safe and where I'd take a risk..."
 
-**Graceful degradation:**
-- Browse available → screenshots + snapshots + WebSearch (richest research)
-- Browse unavailable → WebSearch only (still good)
-- WebSearch also unavailable → agent's built-in design knowledge (always works)
+**优雅降级：**
+- Browse 可用 → 截图 + snapshot + WebSearch（最丰富）
+- Browse 不可用 → 只用 WebSearch（也足够好）
+- WebSearch 也不可用 → 完全依赖模型自身设计知识（始终可行）
 
-If the user said no research, skip entirely and proceed to Phase 3 using your built-in design knowledge.
+如果用户明确说不需要研究，就完全跳过这一阶段，直接基于你的设计知识进入 Phase 3。
 
 ---
 
-## Phase 3: The Complete Proposal
+## Phase 3：完整提案
 
-This is the soul of the skill. Propose EVERYTHING as one coherent package.
+这是这个技能最核心的部分。你要把**整套系统**作为一个完整、自洽的设计包提出来。
 
-**AskUserQuestion Q2 — present the full proposal with SAFE/RISK breakdown:**
+**AskUserQuestion Q2：用 SAFE / RISK 结构呈现完整提案：**
 
 ```
 Based on [product context] and [research findings / my design knowledge]:
@@ -158,7 +158,7 @@ your product becomes memorable. Which risks appeal to you? Want to see
 different ones? Or adjust anything else?
 ```
 
-The SAFE/RISK breakdown is critical. Design coherence is table stakes — every product in a category can be coherent and still look identical. The real question is: where do you take creative risks? The agent should always propose at least 2 risks, each with a clear rationale for why the risk is worth taking and what the user gives up. Risks might include: an unexpected typeface for the category, a bold accent color nobody else uses, tighter or looser spacing than the norm, a layout approach that breaks from convention, motion choices that add personality.
+SAFE / RISK 的拆分非常关键。仅仅“自洽”只是入场券，同一类别里的所有产品都可能自洽却长得一模一样。真正的问题是：你打算把创意风险下在哪些位置？你至少要提出 2 个风险点，并清楚说明为什么这个风险值得承担，以及用户会放弃什么。风险可以来自：这个类别里少见的字体选择、没人用的强调色、更紧或更松的间距节奏、打破惯例的布局方式、能增加个性的动效等。
 
 **Options:** A) Looks great — generate the preview page. B) I want to adjust [section]. C) I want different risks — show me wilder options. D) Start over with a different direction. E) Skip the preview, just write DESIGN.md.
 
@@ -205,33 +205,33 @@ Inter, Roboto, Arial, Helvetica, Open Sans, Lato, Montserrat, Poppins
 - Generic stock-photo-style hero sections
 - "Built for X" / "Designed for Y" marketing copy patterns
 
-### Coherence Validation
+### 连贯性验证
 
-When the user overrides one section, check if the rest still coheres. Flag mismatches with a gentle nudge — never block:
+当用户单独改动某一个部分时，要检查整套系统是否还连贯。如果出现不匹配，要温和提醒，但不要阻塞：
 
 - Brutalist/Minimal aesthetic + expressive motion → "Heads up: brutalist aesthetics usually pair with minimal motion. Your combo is unusual — which is fine if intentional. Want me to suggest motion that fits, or keep it?"
 - Expressive color + restrained decoration → "Bold palette with minimal decoration can work, but the colors will carry a lot of weight. Want me to suggest decoration that supports the palette?"
 - Creative-editorial layout + data-heavy product → "Editorial layouts are gorgeous but can fight data density. Want me to show how a hybrid approach keeps both?"
-- Always accept the user's final choice. Never refuse to proceed.
+- 无论如何，都要接受用户最终选择。不要拒绝继续。
 
 ---
 
-## Phase 4: Drill-downs (only if user requests adjustments)
+## Phase 4：局部深入（仅当用户主动要求微调时）
 
-When the user wants to change a specific section, go deep on that section:
+当用户想改某个具体部分时，就只在那个部分深入展开：
 
 - **Fonts:** Present 3-5 specific candidates with rationale, explain what each evokes, offer the preview page
 - **Colors:** Present 2-3 palette options with hex values, explain the color theory reasoning
 - **Aesthetic:** Walk through which directions fit their product and why
 - **Layout/Spacing/Motion:** Present the approaches with concrete tradeoffs for their product type
 
-Each drill-down is one focused AskUserQuestion. After the user decides, re-check coherence with the rest of the system.
+每次 drill-down 都应该是一个聚焦的 AskUserQuestion。用户做出选择后，再重新检查它与整套系统是否仍然连贯。
 
 ---
 
-## Phase 5: Font & Color Preview Page (default ON)
+## Phase 5：字体与配色预览页（默认开启）
 
-Generate a polished HTML preview page and open it in the user's browser. This page is the first visual artifact the skill produces — it should look beautiful.
+生成一个精致的 HTML 预览页，并在用户浏览器中打开。它是这个技能产出的第一份视觉成果，因此必须本身就很好看。
 
 ```bash
 PREVIEW_FILE="/tmp/design-consultation-preview-$(date +%s).html"

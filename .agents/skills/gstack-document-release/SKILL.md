@@ -283,73 +283,68 @@ find . -maxdepth 2 -name "*.md" -not -path "./.git/*" -not -path "./node_modules
 
 ---
 
-## Step 2: Per-File Documentation Audit
+## Step 2：逐文件文档审计
 
-Read each documentation file and cross-reference it against the diff. Use these generic heuristics
-(adapt to whatever project you're in — these are not gstack-specific):
+逐个读取文档文件，并与 diff 做交叉检查。使用这些通用启发式规则
+（可根据具体项目调整，它们并非只适用于 gstack）：
 
-**README.md:**
-- Does it describe all features and capabilities visible in the diff?
-- Are install/setup instructions consistent with the changes?
-- Are examples, demos, and usage descriptions still valid?
-- Are troubleshooting steps still accurate?
+**README.md：**
+- 它是否覆盖了 diff 中能看到的所有新增功能与能力？
+- 安装 / setup 说明是否仍然和当前实现一致？
+- 示例、演示、使用说明是否仍然有效？
+- troubleshooting 步骤是否还准确？
 
-**ARCHITECTURE.md:**
-- Do ASCII diagrams and component descriptions match the current code?
-- Are design decisions and "why" explanations still accurate?
-- Be conservative — only update things clearly contradicted by the diff. Architecture docs
-  describe things unlikely to change frequently.
+**ARCHITECTURE.md：**
+- ASCII 图和组件说明是否仍与当前代码一致？
+- 设计决策及其 “why” 说明是否还成立？
+- 这里要保守，只更新那些被 diff 明确打脸的部分。架构文档描述的是不应高频变动的东西。
 
-**CONTRIBUTING.md — New contributor smoke test:**
-- Walk through the setup instructions as if you are a brand new contributor.
-- Are the listed commands accurate? Would each step succeed?
-- Do test tier descriptions match the current test infrastructure?
-- Are workflow descriptions (dev setup, contributor mode, etc.) current?
-- Flag anything that would fail or confuse a first-time contributor.
+**CONTRIBUTING.md —— 新贡献者 smoke test：**
+- 假装自己是第一次进入这个项目的新贡献者，完整走一遍 setup 指引
+- 列出来的命令是否准确？每一步真的能成功吗？
+- 测试分层的说明是否匹配当前测试基础设施？
+- 工作流说明（dev setup、contributor mode 等）是否还最新？
+- 任何会让第一次贡献者失败或迷惑的地方都要明确标出来
 
-**CLAUDE.md / project instructions:**
-- Does the project structure section match the actual file tree?
-- Are listed commands and scripts accurate?
-- Do build/test instructions match what's in package.json (or equivalent)?
+**CLAUDE.md / 项目指令文件：**
+- 项目结构说明是否与实际目录树一致？
+- 列出来的命令和脚本是否准确？
+- 构建 / 测试说明是否和 `package.json`（或等价文件）一致？
 
-**Any other .md files:**
-- Read the file, determine its purpose and audience.
-- Cross-reference against the diff to check if it contradicts anything the file says.
+**其他任意 `.md` 文件：**
+- 先读懂这份文档面向谁、解决什么问题
+- 再把它和 diff 对照，看当前改动是否让文档中某些说法失效或自相矛盾
 
-For each file, classify needed updates as:
+对每份文档，把需要的更新分成两类：
 
-- **Auto-update** — Factual corrections clearly warranted by the diff: adding an item to a
-  table, updating a file path, fixing a count, updating a project structure tree.
-- **Ask user** — Narrative changes, section removal, security model changes, large rewrites
-  (more than ~10 lines in one section), ambiguous relevance, adding entirely new sections.
+- **Auto-update** —— diff 能明确支持的事实修正，例如补一个表格项、更新文件路径、修正数量、同步项目结构树
+- **Ask user** —— 叙事性改动、删除 section、安全模型变化、大段重写（单个 section 超过约 10 行）、是否相关本身存在歧义、或新增整段内容
 
 ---
 
-## Step 3: Apply Auto-Updates
+## Step 3：执行 Auto-Updates
 
-Make all clear, factual updates directly using the Edit tool.
+所有明确的事实性更新，都直接用 Edit 工具完成。
 
-For each file modified, output a one-line summary describing **what specifically changed** — not
-just "Updated README.md" but "README.md: added /new-skill to skills table, updated skill count
-from 9 to 10."
+每修改一个文件，都要输出一句具体说明，告诉用户**到底改了什么**。不要只说 “Updated README.md”，而要说类似：`"README.md: added /new-skill to skills table, updated skill count from 9 to 10."`
 
-**Never auto-update:**
-- README introduction or project positioning
-- ARCHITECTURE philosophy or design rationale
-- Security model descriptions
-- Do not remove entire sections from any document
+**永远不要自动改这些：**
+- README 的引言和项目定位
+- ARCHITECTURE 中的设计哲学或设计理由
+- 安全模型描述
+- 不要自动删除任何文档中的整段 section
 
 ---
 
-## Step 4: Ask About Risky/Questionable Changes
+## Step 4：针对高风险 / 有歧义的改动提问
 
-For each risky or questionable update identified in Step 2, use AskUserQuestion with:
-- Context: project name, branch, which doc file, what we're reviewing
-- The specific documentation decision
-- `RECOMMENDATION: Choose [X] because [one-line reason]`
-- Options including C) Skip — leave as-is
+对 Step 2 里识别出的每一个高风险或有歧义的改动，都通过 AskUserQuestion 来确认：
+- 先交代上下文：项目名、分支、正在审哪份文档
+- 明确说出这次文档决策的具体点是什么
+- 给出 `RECOMMENDATION: Choose [X] because [one-line reason]`
+- 选项里必须包含 C) Skip —— 保持现状不动
 
-Apply approved changes immediately after each answer.
+每次用户回答之后，都要立即落地其已批准的改动。
 
 ---
 
