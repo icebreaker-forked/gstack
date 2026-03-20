@@ -1,12 +1,12 @@
 ---
 name: browse
 description: |
-  Fast headless browser for QA testing and site dogfooding. Navigate any URL, interact with
-  elements, verify page state, diff before/after actions, take annotated screenshots, check
-  responsive layouts, test forms and uploads, handle dialogs, and assert element states.
-  ~100ms per command. Use when you need to test a feature, verify a deployment, dogfood a
-  user flow, or file a bug with evidence. Use when asked to "open in browser", "test the
-  site", "take a screenshot", or "dogfood this".
+  用于 QA 测试和产品自测的高速无头浏览器。可以访问任意 URL、与页面元素交互、
+  验证页面状态、查看前后变化 diff、截图并加标注、检查响应式布局、测试表单与上传、
+  处理对话框，并断言元素状态。单命令通常约 100ms。
+  适用于测试某个功能、验证部署结果、亲自走一遍用户流程，或带证据地提交 bug。
+  当用户说 “open in browser”、“test the site”、“take a screenshot” 或
+  “dogfood this” 时使用。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -205,10 +205,10 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 将 `SKILL_NAME` 替换为 frontmatter 中的真实技能名，将 `OUTCOME` 替换为 success / error / abort，并根据是否用过 `$B` 将 `USED_BROWSE` 填为 true / false。
 如果无法判断结果状态，则使用 "unknown"。这条命令在后台执行，不应阻塞用户。
 
-# browse: QA Testing & Dogfooding
+# browse: QA 测试与产品自测
 
-Persistent headless Chromium. First call auto-starts (~3s), then ~100ms per command.
-State persists between calls (cookies, tabs, login sessions).
+持久化的无头 Chromium。首次调用会自动启动（约 3 秒），之后每条命令通常约 100ms。
+调用之间会保留状态，包括 cookies、标签页和登录会话。
 
 ## SETUP（在任何 browse 命令之前先执行此检查）
 
@@ -229,49 +229,49 @@ fi
 2. Run: `cd <SKILL_DIR> && ./setup`
 3. 如果未安装 `bun`：执行 `curl -fsSL https://bun.sh/install | bash`
 
-## Core QA Patterns
+## 核心 QA 模式
 
-### 1. Verify a page loads correctly
+### 1. 验证页面是否正常加载
 ```bash
 $B goto https://yourapp.com
-$B text                          # content loads?
-$B console                       # JS errors?
-$B network                       # failed requests?
-$B is visible ".main-content"    # key elements present?
+$B text                          # 内容是否正常加载？
+$B console                       # 是否有 JS 错误？
+$B network                       # 是否有失败请求？
+$B is visible ".main-content"    # 关键元素是否存在？
 ```
 
-### 2. Test a user flow
+### 2. 测试一个用户流程
 ```bash
 $B goto https://app.com/login
-$B snapshot -i                   # see all interactive elements
+$B snapshot -i                   # 查看所有可交互元素
 $B fill @e3 "user@test.com"
 $B fill @e4 "password"
-$B click @e5                     # submit
-$B snapshot -D                   # diff: what changed after submit?
-$B is visible ".dashboard"       # success state present?
+$B click @e5                     # 提交
+$B snapshot -D                   # diff：提交后发生了什么变化？
+$B is visible ".dashboard"       # 是否进入成功状态？
 ```
 
-### 3. Verify an action worked
+### 3. 验证一个动作是否真的生效
 ```bash
-$B snapshot                      # baseline
-$B click @e3                     # do something
-$B snapshot -D                   # unified diff shows exactly what changed
+$B snapshot                      # 基线
+$B click @e3                     # 执行动作
+$B snapshot -D                   # 用 unified diff 精确查看变化
 ```
 
-### 4. Visual evidence for bug reports
+### 4. 为 bug 报告收集视觉证据
 ```bash
-$B snapshot -i -a -o /tmp/annotated.png   # labeled screenshot
-$B screenshot /tmp/bug.png                # plain screenshot
-$B console                                # error log
+$B snapshot -i -a -o /tmp/annotated.png   # 带标注截图
+$B screenshot /tmp/bug.png                # 普通截图
+$B console                                # 错误日志
 ```
 
-### 5. Find all clickable elements (including non-ARIA)
+### 5. 找出所有可点击元素（包括非 ARIA 元素）
 ```bash
-$B snapshot -C                   # finds divs with cursor:pointer, onclick, tabindex
-$B click @c1                     # interact with them
+$B snapshot -C                   # 找出带 cursor:pointer、onclick、tabindex 的 div 等元素
+$B click @c1                     # 与它们交互
 ```
 
-### 6. Assert element states
+### 6. 断言元素状态
 ```bash
 $B is visible ".modal"
 $B is enabled "#submit-btn"
@@ -282,60 +282,59 @@ $B is focused "#search-input"
 $B js "document.body.textContent.includes('Success')"
 ```
 
-### 7. Test responsive layouts
+### 7. 测试响应式布局
 ```bash
-$B responsive /tmp/layout        # mobile + tablet + desktop screenshots
-$B viewport 375x812              # or set specific viewport
+$B responsive /tmp/layout        # 一次生成 mobile + tablet + desktop 截图
+$B viewport 375x812              # 或手动指定 viewport
 $B screenshot /tmp/mobile.png
 ```
 
-### 8. Test file uploads
+### 8. 测试文件上传
 ```bash
 $B upload "#file-input" /path/to/file.pdf
 $B is visible ".upload-success"
 ```
 
-### 9. Test dialogs
+### 9. 测试对话框
 ```bash
-$B dialog-accept "yes"           # set up handler
-$B click "#delete-button"        # trigger dialog
-$B dialog                        # see what appeared
-$B snapshot -D                   # verify deletion happened
+$B dialog-accept "yes"           # 先设置处理方式
+$B click "#delete-button"        # 触发对话框
+$B dialog                        # 查看弹出的内容
+$B snapshot -D                   # 验证删除是否真的发生
 ```
 
-### 10. Compare environments
+### 10. 比较不同环境
 ```bash
 $B diff https://staging.app.com https://prod.app.com
 ```
 
-### 11. Show screenshots to the user
-After `$B screenshot`, `$B snapshot -a -o`, or `$B responsive`, always use the Read tool on the output PNG(s) so the user can see them. Without this, screenshots are invisible.
+### 11. 把截图展示给用户
+执行 `$B screenshot`、`$B snapshot -a -o` 或 `$B responsive` 后，必须再用 Read 工具读取输出的 PNG 文件，否则截图对用户是不可见的。
 
-## User Handoff
+## 用户接管
 
-When you hit something you can't handle in headless mode (CAPTCHA, complex auth, multi-factor
-login), hand off to the user:
+当你在无头模式下遇到自己无法处理的情况（如 CAPTCHA、复杂认证、多因素登录）时，把浏览器交给用户接手：
 
 ```bash
-# 1. Open a visible Chrome at the current page
+# 1. 在当前页面打开一个可见的 Chrome
 $B handoff "Stuck on CAPTCHA at login page"
 
-# 2. Tell the user what happened (via AskUserQuestion)
+# 2. 告诉用户发生了什么（通过 AskUserQuestion）
 #    "I've opened Chrome at the login page. Please solve the CAPTCHA
 #     and let me know when you're done."
 
-# 3. When user says "done", re-snapshot and continue
+# 3. 当用户说 “done” 后，重新 snapshot 并继续
 $B resume
 ```
 
-**When to use handoff:**
-- CAPTCHAs or bot detection
-- Multi-factor authentication (SMS, authenticator app)
-- OAuth flows that require user interaction
-- Complex interactions the AI can't handle after 3 attempts
+**适合 handoff 的场景：**
+- CAPTCHA 或 bot 检测
+- 多因素认证（短信、认证器）
+- 需要用户亲自操作的 OAuth 流程
+- AI 连续尝试 3 次后仍搞不定的复杂交互
 
-The browser preserves all state (cookies, localStorage, tabs) across the handoff.
-After `resume`, you get a fresh snapshot of wherever the user left off.
+浏览器会在 handoff 前后保留全部状态，包括 cookies、localStorage 和标签页。
+执行 `resume` 后，你会得到用户停下位置的一份全新 snapshot。
 
 ## Snapshot Flags
 
@@ -374,7 +373,7 @@ $B click @c1       # 光标可交互引用（来自 -C）
 
 页面跳转后旧引用会失效，因此在 `goto` 之后要重新执行 `snapshot`。
 
-## Full Command List
+## 完整命令列表
 
 ### Navigation
 | 命令 | 说明 |
