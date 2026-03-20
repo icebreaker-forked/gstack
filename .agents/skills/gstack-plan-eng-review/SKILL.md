@@ -1,12 +1,12 @@
 ---
 name: plan-eng-review
 description: |
-  Eng manager-mode plan review. Lock in the execution plan — architecture,
-  data flow, diagrams, edge cases, test coverage, performance. Walks through
-  issues interactively with opinionated recommendations. Use when asked to
-  "review the architecture", "engineering review", or "lock in the plan".
-  Proactively suggest when the user has a plan or design doc and is about to
-  start coding — to catch architecture issues before implementation.
+  工程经理模式的计划评审。用于锁定执行方案中的架构、数据流、图示、
+  边界条件、测试覆盖和性能问题。它会以交互方式逐项审视问题，并给出
+  有明确倾向的推荐。当用户说 “review the architecture”、
+  “engineering review” 或 “lock in the plan” 时使用。
+  当用户已经有 plan 或 design doc，并准备开始写代码时，应主动建议，
+  以便在实现前先拦住架构问题。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -207,22 +207,22 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 
 # Plan Review Mode
 
-Review this plan thoroughly before making any code changes. For every issue or recommendation, explain the concrete tradeoffs, give me an opinionated recommendation, and ask for my input before assuming a direction.
+在做任何代码改动之前，先把这个计划彻底审一遍。对每个问题或建议，都要说明具体权衡，给出你有倾向性的推荐，并在默认采用某个方向前先征求我的输入。
 
-## Priority hierarchy
-If you are running low on context or the user asks you to compress: Step 0 > Test diagram > Opinionated recommendations > Everything else. Never skip Step 0 or the test diagram.
+## 优先级层级
+如果上下文不够，或用户要求压缩内容：优先级顺序是 Step 0 > Test diagram > Opinionated recommendations > 其他所有内容。绝不能跳过 Step 0，也不能跳过测试图示。
 
-## My engineering preferences (use these to guide your recommendations):
-* DRY is important—flag repetition aggressively.
-* Well-tested code is non-negotiable; I'd rather have too many tests than too few.
-* I want code that's "engineered enough" — not under-engineered (fragile, hacky) and not over-engineered (premature abstraction, unnecessary complexity).
-* I err on the side of handling more edge cases, not fewer; thoughtfulness > speed.
-* Bias toward explicit over clever.
-* Minimal diff: achieve the goal with the fewest new abstractions and files touched.
+## 我的工程偏好（你的建议应以此为准）
+* 我很看重 DRY，遇到重复要积极指出。
+* 测试充分是不可妥协的，我宁可测试偏多，也不要偏少。
+* 我想要的是“工程化恰到好处”的代码，既不要欠工程化（脆弱、投机），也不要过度工程化（过早抽象、无意义复杂度）。
+* 我更倾向于多处理边界情况，而不是少处理；周到比速度更重要。
+* 明确优于机巧。
+* 最小 diff：用尽可能少的新抽象和尽可能少的文件改动达成目标。
 
-## Cognitive Patterns — How Great Eng Managers Think
+## 认知模式：优秀工程经理如何思考
 
-These are not additional checklist items. They are the instincts that experienced engineering leaders develop over years — the pattern recognition that separates "reviewed the code" from "caught the landmine." Apply them throughout your review.
+这些不是额外 checklist，而是资深工程负责人多年积累出的判断直觉，是“看过代码”和“提前发现地雷”之间的差别。请在整个评审过程中持续使用这些思维模式。
 
 1. **State diagnosis** — Teams exist in four states: falling behind, treading water, repaying debt, innovating. Each demands a different intervention (Larson, An Elegant Puzzle).
 2. **Blast radius instinct** — Every decision evaluated through "what's the worst case and how many systems/people does it affect?"
@@ -242,14 +242,14 @@ These are not additional checklist items. They are the instincts that experience
 
 When evaluating architecture, think "boring by default." When reviewing tests, think "systems over heroes." When assessing complexity, ask Brooks's question. When a plan introduces new infrastructure, check whether it's spending an innovation token wisely.
 
-## Documentation and diagrams:
-* I value ASCII art diagrams highly — for data flow, state machines, dependency graphs, processing pipelines, and decision trees. Use them liberally in plans and design docs.
-* For particularly complex designs or behaviors, embed ASCII diagrams directly in code comments in the appropriate places: Models (data relationships, state transitions), Controllers (request flow), Concerns (mixin behavior), Services (processing pipelines), and Tests (what's being set up and why) when the test structure is non-obvious.
-* **Diagram maintenance is part of the change.** When modifying code that has ASCII diagrams in comments nearby, review whether those diagrams are still accurate. Update them as part of the same commit. Stale diagrams are worse than no diagrams — they actively mislead. Flag any stale diagrams you encounter during review even if they're outside the immediate scope of the change.
+## 文档与图示
+* 我很重视 ASCII 图，无论是数据流、状态机、依赖图、处理流水线还是决策树，只要复杂就应该大胆使用。
+* 对特别复杂的设计或行为，应该把 ASCII 图直接嵌进代码注释里：例如 Model（数据关系、状态流转）、Controller（请求流程）、Concern（混入行为）、Service（处理流水线）、Tests（测试在搭什么以及为什么这样搭）。
+* **图示维护本身就是改动的一部分。** 如果你修改的代码附近已经有 ASCII 图，就必须一起检查它们是否还准确。过期的图比没有图更糟，因为它会主动误导。即使图示不在当前改动核心范围内，只要发现过期，也要指出。
 
-## BEFORE YOU START:
+## 开始之前：
 
-### Design Doc Check
+### Design Doc 检查
 ```bash
 SLUG=$(~/.codex/skills/gstack/browse/bin/remote-slug 2>/dev/null || basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null | tr '/' '-' || echo 'no-branch')
@@ -257,18 +257,17 @@ DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-$BRANCH-design-*.md 2>/dev/null | head
 [ -z "$DESIGN" ] && DESIGN=$(ls -t ~/.gstack/projects/$SLUG/*-design-*.md 2>/dev/null | head -1)
 [ -n "$DESIGN" ] && echo "Design doc found: $DESIGN" || echo "No design doc found"
 ```
-If a design doc exists, read it. Use it as the source of truth for the problem statement, constraints, and chosen approach. If it has a `Supersedes:` field, note that this is a revised design — check the prior version for context on what changed and why.
+如果存在 design doc，就读它，并把它当作问题陈述、约束条件和既定方案的真实来源。如果里面有 `Supersedes:` 字段，说明这是修订版设计；你要再去看上一版，理解改了什么、为什么改。
 
-### Step 0: Scope Challenge
-Before reviewing anything, answer these questions:
-1. **What existing code already partially or fully solves each sub-problem?** Can we capture outputs from existing flows rather than building parallel ones?
-2. **What is the minimum set of changes that achieves the stated goal?** Flag any work that could be deferred without blocking the core objective. Be ruthless about scope creep.
-3. **Complexity check:** If the plan touches more than 8 files or introduces more than 2 new classes/services, treat that as a smell and challenge whether the same goal can be achieved with fewer moving parts.
-4. **TODOS cross-reference:** Read `TODOS.md` if it exists. Are any deferred items blocking this plan? Can any deferred items be bundled into this PR without expanding scope? Does this plan create new work that should be captured as a TODO?
+### Step 0：范围挑战
+在开始正式评审前，先回答这些问题：
+1. **现有代码里，哪些部分已经部分或完整解决了各个子问题？** 是否能复用已有流程的输出，而不是另起一条平行链路？
+2. **为了达成既定目标，最小改动集是什么？** 任何不会阻塞核心目标、却可以后移的工作都应该被明确标出来。对 scope creep 要足够无情。
+3. **复杂度检查：** 如果计划会触碰超过 8 个文件，或引入超过 2 个新类 / service，就应该把它当成一种异味，质疑是否可以用更少的部件达成相同目标。
+4. **TODOS 交叉检查：** 如果存在 `TODOS.md`，就读它。里面被延后的事项是否会卡住当前计划？有没有某些延后项可以在不扩大范围的前提下顺手并入这次 PR？当前计划是否会衍生出新的 TODO？
+5. **完整性检查：** 计划做的是完整版本，还是一个捷径版本？在 AI 辅助编码下，100% 测试覆盖、完整边界条件和完整错误路径的成本，相比人工团队便宜 10-100 倍。如果某个捷径只省下人类工时，却只给 CC+gstack 节约几分钟，你应该推荐完整版本。Boil the lake。
 
-5. **Completeness check:** Is the plan doing the complete version or a shortcut? With AI-assisted coding, the cost of completeness (100% test coverage, full edge case handling, complete error paths) is 10-100x cheaper than with a human team. If the plan proposes a shortcut that saves human-hours but only saves minutes with CC+gstack, recommend the complete version. Boil the lake.
-
-If the complexity check triggers (8+ files or 2+ new classes/services), proactively recommend scope reduction via AskUserQuestion — explain what's overbuilt, propose a minimal version that achieves the core goal, and ask whether to reduce or proceed as-is. If the complexity check does not trigger, present your Step 0 findings and proceed directly to Section 1.
+如果复杂度检查被触发（8+ 文件或 2+ 新类 / service），就应通过 AskUserQuestion 主动建议收缩范围：解释哪里过度设计，提出一个能完成核心目标的最小版本，并让用户选择是缩减还是保持原计划。如果复杂度检查没有触发，则直接呈现 Step 0 发现，并进入 Section 1。
 
 ### Step 0.5: Codex plan review (optional)
 
