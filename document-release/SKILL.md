@@ -2,11 +2,11 @@
 name: document-release
 version: 1.0.0
 description: |
-  Post-ship documentation update. Reads all project docs, cross-references the
-  diff, updates README/ARCHITECTURE/CONTRIBUTING/CLAUDE.md to match what shipped,
-  polishes CHANGELOG voice, cleans up TODOS, and optionally bumps VERSION. Use when
-  asked to "update the docs", "sync documentation", or "post-ship docs".
-  Proactively suggest after a PR is merged or code is shipped.
+  发版后的文档同步。它会读取项目中的文档文件，与 diff 做交叉比对，
+  更新 README / ARCHITECTURE / CONTRIBUTING / CLAUDE.md，使其与实际已发内容一致，
+  润色 CHANGELOG 语气，清理 TODOS，并在必要时询问是否 bump VERSION。
+  当用户说 “update the docs”、“sync documentation” 或 “post-ship docs” 时使用。
+  在 PR 合并后或代码已经 ship 之后，应主动建议。
 allowed-tools:
   - Bash
   - Read
@@ -230,42 +230,39 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 
 ---
 
-# Document Release: Post-Ship Documentation Update
+# Document Release：发版后的文档同步
 
-You are running the `/document-release` workflow. This runs **after `/ship`** (code committed, PR
-exists or about to exist) but **before the PR merges**. Your job: ensure every documentation file
-in the project is accurate, up to date, and written in a friendly, user-forward voice.
+你正在执行 `/document-release` 工作流。这个流程发生在 **`/ship` 之后**（代码已提交，PR 已存在或即将创建），但**在 PR 合并之前**。你的职责是确保项目中的每一份文档都准确、最新，并且使用友好、面向用户的表达方式。
 
-You are mostly automated. Make obvious factual updates directly. Stop and ask only for risky or
-subjective decisions.
+这个流程以自动化为主。凡是明确的事实性修正，都应直接改；只有当变更具有风险、涉及表述判断或主观取舍时，才停下来提问。
 
-**Only stop for:**
-- Risky/questionable doc changes (narrative, philosophy, security, removals, large rewrites)
-- VERSION bump decision (if not already bumped)
-- New TODOS items to add
-- Cross-doc contradictions that are narrative (not factual)
+**只在以下情况停下：**
+- 高风险或有争议的文档改动（如叙事、哲学定位、安全模型、删除内容、大段重写）
+- VERSION bump 决策（如果当前分支还没 bump）
+- 是否要新增 TODO 项
+- 多份文档之间存在叙事性冲突（而非纯事实冲突）
 
-**Never stop for:**
-- Factual corrections clearly from the diff
-- Adding items to tables/lists
-- Updating paths, counts, version numbers
-- Fixing stale cross-references
-- CHANGELOG voice polish (minor wording adjustments)
-- Marking TODOS complete
-- Cross-doc factual inconsistencies (e.g., version number mismatch)
+**绝不要为这些事停下：**
+- 从 diff 中可以明确推导出的事实修正
+- 给表格 / 列表补项
+- 更新路径、数量、版本号
+- 修正过期的交叉引用
+- CHANGELOG 的轻量语气润色
+- 标记 TODO 完成
+- 多份文档之间的事实性不一致（例如版本号不一致）
 
-**NEVER do:**
-- Overwrite, replace, or regenerate CHANGELOG entries — polish wording only, preserve all content
-- Bump VERSION without asking — always use AskUserQuestion for version changes
-- Use `Write` tool on CHANGELOG.md — always use `Edit` with exact `old_string` matches
+**绝对不要做这些事：**
+- 覆盖、替换或重生成 CHANGELOG 条目；你只能润色措辞，不能改写内容事实
+- 未经询问就 bump VERSION；凡是版本改动都必须通过 AskUserQuestion
+- 对 `CHANGELOG.md` 使用 `Write`；必须始终用 `Edit`，并依赖精确 `old_string` 匹配
 
 ---
 
-## Step 1: Pre-flight & Diff Analysis
+## Step 1：Pre-flight 与 diff 分析
 
-1. Check the current branch. If on the base branch, **abort**: "You're on the base branch. Run from a feature branch."
+1. 检查当前分支。如果就在基线分支上，**直接中止**：`"You're on the base branch. Run from a feature branch."`
 
-2. Gather context about what changed:
+2. 收集本次改动的上下文：
 
 ```bash
 git diff <base>...HEAD --stat
@@ -279,19 +276,19 @@ git log <base>..HEAD --oneline
 git diff <base>...HEAD --name-only
 ```
 
-3. Discover all documentation files in the repo:
+3. 找出仓库中的全部文档文件：
 
 ```bash
 find . -maxdepth 2 -name "*.md" -not -path "./.git/*" -not -path "./node_modules/*" -not -path "./.gstack/*" -not -path "./.context/*" | sort
 ```
 
-4. Classify the changes into categories relevant to documentation:
-   - **New features** — new files, new commands, new skills, new capabilities
-   - **Changed behavior** — modified services, updated APIs, config changes
-   - **Removed functionality** — deleted files, removed commands
-   - **Infrastructure** — build system, test infrastructure, CI
+4. 把代码变更按对文档有意义的类别分组：
+   - **New features**：新增文件、新命令、新技能、新能力
+   - **Changed behavior**：已有行为变化、服务逻辑变化、API 更新、配置变化
+   - **Removed functionality**：被删除的功能、命令或文件
+   - **Infrastructure**：构建系统、测试基础设施、CI 等
 
-5. Output a brief summary: "Analyzing N files changed across M commits. Found K documentation files to review."
+5. 输出一段简短总结：`"Analyzing N files changed across M commits. Found K documentation files to review."`
 
 ---
 

@@ -2,12 +2,11 @@
 name: investigate
 version: 1.0.0
 description: |
-  Systematic debugging with root cause investigation. Four phases: investigate,
-  analyze, hypothesize, implement. Iron Law: no fixes without root cause.
-  Use when asked to "debug this", "fix this bug", "why is this broken",
-  "investigate this error", or "root cause analysis".
-  Proactively suggest when the user reports errors, unexpected behavior, or
-  is troubleshooting why something stopped working.
+  以根因调查为核心的系统化调试。分四个阶段：investigate、analyze、
+  hypothesize、implement。铁律是：没有根因，就不要动手修。
+  当用户说 “debug this”、“fix this bug”、“why is this broken”、
+  “investigate this error” 或 “root cause analysis” 时使用。
+  当用户报告报错、异常行为，或正在排查某个东西为什么突然不工作时，应主动建议。
 allowed-tools:
   - Bash
   - Read
@@ -22,12 +21,12 @@ hooks:
       hooks:
         - type: command
           command: "bash ${CLAUDE_SKILL_DIR}/../freeze/bin/check-freeze.sh"
-          statusMessage: "Checking debug scope boundary..."
+          statusMessage: "正在检查调试范围边界..."
     - matcher: "Write"
       hooks:
         - type: command
           command: "bash ${CLAUDE_SKILL_DIR}/../freeze/bin/check-freeze.sh"
-          statusMessage: "Checking debug scope boundary..."
+          statusMessage: "正在检查调试范围边界..."
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -228,43 +227,43 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 
 # Systematic Debugging
 
-## Iron Law
+## 铁律
 
-**NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST.**
+**没有根因调查，就不要先修。**
 
-Fixing symptoms creates whack-a-mole debugging. Every fix that doesn't address root cause makes the next bug harder to find. Find the root cause, then fix it.
+只修症状会把调试变成打地鼠。任何没有打到根因的修复，都会让下一个 bug 更难发现。先找到根因，再修。
 
 ---
 
-## Phase 1: Root Cause Investigation
+## Phase 1：根因调查
 
-Gather context before forming any hypothesis.
+在形成任何假设之前，先把上下文收集完整。
 
-1. **Collect symptoms:** Read the error messages, stack traces, and reproduction steps. If the user hasn't provided enough context, ask ONE question at a time via AskUserQuestion.
+1. **收集症状：** 读取错误信息、堆栈、复现步骤。如果用户给的信息还不够，就一次只问一个问题，通过 AskUserQuestion 补上下文。
 
-2. **Read the code:** Trace the code path from the symptom back to potential causes. Use Grep to find all references, Read to understand the logic.
+2. **读代码：** 从症状出发，沿代码路径一路回溯潜在原因。用 Grep 找引用，用 Read 理解实际逻辑。
 
-3. **Check recent changes:**
+3. **检查最近改动：**
    ```bash
    git log --oneline -20 -- <affected-files>
    ```
-   Was this working before? What changed? A regression means the root cause is in the diff.
+   这个东西之前是工作的吗？后来改了什么？如果是回归，那么根因通常就在 diff 里。
 
-4. **Reproduce:** Can you trigger the bug deterministically? If not, gather more evidence before proceeding.
+4. **复现：** 能不能稳定地、可重复地触发这个 bug？如果不能，在继续之前先收集更多证据。
 
-Output: **"Root cause hypothesis: ..."** — a specific, testable claim about what is wrong and why.
+输出：**`"Root cause hypothesis: ..."`**，必须是一个具体、可验证的说法，说明到底哪里错了、为什么会错。
 
 ---
 
-## Scope Lock
+## 锁定范围
 
-After forming your root cause hypothesis, lock edits to the affected module to prevent scope creep.
+在形成根因假设之后，把编辑范围锁定到受影响模块，避免 scope creep。
 
 ```bash
 [ -x "${CLAUDE_SKILL_DIR}/../freeze/bin/check-freeze.sh" ] && echo "FREEZE_AVAILABLE" || echo "FREEZE_UNAVAILABLE"
 ```
 
-**If FREEZE_AVAILABLE:** Identify the narrowest directory containing the affected files. Write it to the freeze state file:
+**如果 `FREEZE_AVAILABLE`：** 找出包含受影响文件的最小目录，并把它写进 freeze 状态文件：
 
 ```bash
 STATE_DIR="${CLAUDE_PLUGIN_DATA:-$HOME/.gstack}"
@@ -273,42 +272,42 @@ echo "<detected-directory>/" > "$STATE_DIR/freeze-dir.txt"
 echo "Debug scope locked to: <detected-directory>/"
 ```
 
-Substitute `<detected-directory>` with the actual directory path (e.g., `src/auth/`). Tell the user: "Edits restricted to `<dir>/` for this debug session. This prevents changes to unrelated code. Run `/unfreeze` to remove the restriction."
+把 `<detected-directory>` 替换成真实目录路径（例如 `src/auth/`）。然后告诉用户：`"Edits restricted to <dir>/ for this debug session. This prevents changes to unrelated code. Run /unfreeze to remove the restriction."`
 
-If the bug spans the entire repo or the scope is genuinely unclear, skip the lock and note why.
+如果 bug 实际上横跨整个仓库，或者影响范围确实无法判断，就跳过锁定，但必须说明原因。
 
-**If FREEZE_UNAVAILABLE:** Skip scope lock. Edits are unrestricted.
-
----
-
-## Phase 2: Pattern Analysis
-
-Check if this bug matches a known pattern:
-
-| Pattern | Signature | Where to look |
-|---------|-----------|---------------|
-| Race condition | Intermittent, timing-dependent | Concurrent access to shared state |
-| Nil/null propagation | NoMethodError, TypeError | Missing guards on optional values |
-| State corruption | Inconsistent data, partial updates | Transactions, callbacks, hooks |
-| Integration failure | Timeout, unexpected response | External API calls, service boundaries |
-| Configuration drift | Works locally, fails in staging/prod | Env vars, feature flags, DB state |
-| Stale cache | Shows old data, fixes on cache clear | Redis, CDN, browser cache, Turbo |
-
-Also check:
-- `TODOS.md` for related known issues
-- `git log` for prior fixes in the same area — **recurring bugs in the same files are an architectural smell**, not a coincidence
+**如果 `FREEZE_UNAVAILABLE`：** 直接跳过范围锁定，编辑保持不受限。
 
 ---
 
-## Phase 3: Hypothesis Testing
+## Phase 2：模式分析
 
-Before writing ANY fix, verify your hypothesis.
+检查这个 bug 是否符合某类已知模式：
 
-1. **Confirm the hypothesis:** Add a temporary log statement, assertion, or debug output at the suspected root cause. Run the reproduction. Does the evidence match?
+| 模式 | 典型信号 | 重点排查点 |
+|------|----------|------------|
+| Race condition | 间歇性、和时序相关 | 对共享状态的并发访问 |
+| Nil/null propagation | NoMethodError、TypeError | optional 值缺失保护 |
+| State corruption | 数据不一致、部分更新 | transaction、callback、hook |
+| Integration failure | 超时、返回值异常 | 外部 API 调用、服务边界 |
+| Configuration drift | 本地正常、staging/prod 失败 | 环境变量、feature flag、DB 状态 |
+| Stale cache | 展示旧数据，清缓存后恢复 | Redis、CDN、浏览器缓存、Turbo |
 
-2. **If the hypothesis is wrong:** Return to Phase 1. Gather more evidence. Do not guess.
+同时检查：
+- `TODOS.md` 里是否有相关已知问题
+- `git log` 里同一区域过去是否修过类似问题。**同一批文件反复出 bug，本质上是架构异味，不是巧合。**
 
-3. **3-strike rule:** If 3 hypotheses fail, **STOP**. Use AskUserQuestion:
+---
+
+## Phase 3：验证假设
+
+在写任何 fix 之前，必须先验证你的假设。
+
+1. **确认假设：** 在你怀疑的根因点加临时日志、断言或 debug 输出，然后重新复现。证据是否与假设吻合？
+
+2. **如果假设错了：** 回到 Phase 1，继续收集证据。不要靠猜。
+
+3. **3-strike rule：** 如果连续 3 个假设都失败，就**停止**，并通过 AskUserQuestion 提问：
    ```
    3 hypotheses tested, none match. This may be an architectural issue
    rather than a simple bug.
@@ -318,28 +317,28 @@ Before writing ANY fix, verify your hypothesis.
    C) Add logging and wait — instrument the area and catch it next time
    ```
 
-**Red flags** — if you see any of these, slow down:
-- "Quick fix for now" — there is no "for now." Fix it right or escalate.
-- Proposing a fix before tracing data flow — you're guessing.
-- Each fix reveals a new problem elsewhere — wrong layer, not wrong code.
+**危险信号：** 只要看到这些迹象，就应该放慢速度：
+- “先临时修一下” —— 这里没有 “for now”。要么修对，要么升级 / 求助。
+- 还没把数据流追清楚，就已经开始提修法 —— 这就是在猜。
+- 每修一个地方，又在别处炸出新问题 —— 这通常说明你打错了层，而不只是改错了一行代码。
 
 ---
 
-## Phase 4: Implementation
+## Phase 4：实施修复
 
-Once root cause is confirmed:
+一旦根因被确认：
 
-1. **Fix the root cause, not the symptom.** The smallest change that eliminates the actual problem.
+1. **修根因，不修症状。** 目标是用最小改动消除真正的问题源头。
 
-2. **Minimal diff:** Fewest files touched, fewest lines changed. Resist the urge to refactor adjacent code.
+2. **最小 diff：** 尽量少碰文件，尽量少改行数。要克制住“顺手重构周边代码”的冲动。
 
-3. **Write a regression test** that:
-   - **Fails** without the fix (proves the test is meaningful)
-   - **Passes** with the fix (proves the fix works)
+3. **补一个回归测试**，并满足：
+   - **不带修复时会失败**（证明测试确实有意义）
+   - **带修复时会通过**（证明修复确实生效）
 
-4. **Run the full test suite.** Paste the output. No regressions allowed.
+4. **跑完整测试套件。** 把输出贴出来，不允许引入回归。
 
-5. **If the fix touches >5 files:** Use AskUserQuestion to flag the blast radius:
+5. **如果修复会碰超过 5 个文件：** 用 AskUserQuestion 明确告知 blast radius：
    ```
    This fix touches N files. That's a large blast radius for a bug fix.
    A) Proceed — the root cause genuinely spans these files
@@ -349,13 +348,13 @@ Once root cause is confirmed:
 
 ---
 
-## Phase 5: Verification & Report
+## Phase 5：验证与报告
 
-**Fresh verification:** Reproduce the original bug scenario and confirm it's fixed. This is not optional.
+**新鲜验证：** 重新跑原始 bug 场景，并确认它确实被修复。这不是可选项。
 
-Run the test suite and paste the output.
+运行测试套件，并贴出输出。
 
-Output a structured debug report:
+输出一份结构化 debug report：
 ```
 DEBUG REPORT
 ════════════════════════════════════════
@@ -371,13 +370,13 @@ Status:          DONE | DONE_WITH_CONCERNS | BLOCKED
 
 ---
 
-## Important Rules
+## 重要规则
 
-- **3+ failed fix attempts → STOP and question the architecture.** Wrong architecture, not failed hypothesis.
-- **Never apply a fix you cannot verify.** If you can't reproduce and confirm, don't ship it.
-- **Never say "this should fix it."** Verify and prove it. Run the tests.
-- **If fix touches >5 files → AskUserQuestion** about blast radius before proceeding.
-- **Completion status:**
-  - DONE — root cause found, fix applied, regression test written, all tests pass
-  - DONE_WITH_CONCERNS — fixed but cannot fully verify (e.g., intermittent bug, requires staging)
-  - BLOCKED — root cause unclear after investigation, escalated
+- **如果连续 3 次修复尝试失败 → 立刻停下，开始怀疑架构。** 这通常不是“假设错了一次”，而是“问题在更高层”。
+- **绝不要应用一个你无法验证的 fix。** 如果无法复现并确认，就不要 ship。
+- **绝不要说 “this should fix it”。** 你必须验证并证明。跑测试。
+- **如果修复触碰 >5 个文件 → 先通过 AskUserQuestion 明确 blast radius，再继续。**
+- **完成状态定义：**
+  - DONE：根因找到、修复已做、回归测试已写、全部测试通过
+  - DONE_WITH_CONCERNS：问题修了，但无法完全验证（例如间歇性 bug、必须上 staging 才能确认）
+  - BLOCKED：调查后仍无法明确根因，已升级 / 求助

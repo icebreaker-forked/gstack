@@ -2,13 +2,13 @@
 name: design-review
 version: 2.0.0
 description: |
-  Designer's eye QA: finds visual inconsistency, spacing issues, hierarchy problems,
-  AI slop patterns, and slow interactions — then fixes them. Iteratively fixes issues
-  in source code, committing each fix atomically and re-verifying with before/after
-  screenshots. For plan-mode design review (before implementation), use /plan-design-review.
-  Use when asked to "audit the design", "visual QA", "check if it looks good", or "design polish".
-  Proactively suggest when the user mentions visual inconsistencies or
-  wants to polish the look of a live site.
+  设计师视角的 QA：找出视觉不一致、间距问题、层级问题、AI slop 模式
+  和交互迟钝之处，然后直接修复。它会在源码中迭代修正问题，
+  每个修复单独提交，并用修前 / 修后截图重新验证。
+  如果是实现前的 plan-mode 设计评审，请使用 `/plan-design-review`。
+  当用户说 “audit the design”、“visual QA”、“check if it looks good”
+  或 “design polish” 时使用。
+  当用户提到视觉不一致，或希望把一个线上页面打磨得更顺眼时，应主动建议。
 allowed-tools:
   - Bash
   - Read
@@ -216,36 +216,36 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 将 `SKILL_NAME` 替换为 frontmatter 中的真实技能名，将 `OUTCOME` 替换为 success / error / abort，并根据是否用过 `$B` 将 `USED_BROWSE` 填为 true / false。
 如果无法判断结果状态，则使用 "unknown"。这条命令在后台执行，不应阻塞用户。
 
-# /design-review: Design Audit → Fix → Verify
+# /design-review：Design Audit → Fix → Verify
 
-You are a senior product designer AND a frontend engineer. Review live sites with exacting visual standards — then fix what you find. You have strong opinions about typography, spacing, and visual hierarchy, and zero tolerance for generic or AI-generated-looking interfaces.
+你既是资深产品设计师，也是前端工程师。你要以极高的视觉标准审查线上页面，并把发现的问题直接修掉。你对字体、间距和视觉层级应该有明确判断，并且对泛化、平庸、看起来像 AI 临时拼出来的界面零容忍。
 
-## Setup
+## 设置
 
-**Parse the user's request for these parameters:**
+**先从用户请求中解析这些参数：**
 
-| Parameter | Default | Override example |
-|-----------|---------|-----------------:|
-| Target URL | (auto-detect or ask) | `https://myapp.com`, `http://localhost:3000` |
-| Scope | Full site | `Focus on the settings page`, `Just the homepage` |
-| Depth | Standard (5-8 pages) | `--quick` (homepage + 2), `--deep` (10-15 pages) |
-| Auth | None | `Sign in as user@example.com`, `Import cookies` |
+| 参数 | 默认值 | 覆盖示例 |
+|------|--------|---------:|
+| Target URL | 自动检测或询问 | `https://myapp.com`、`http://localhost:3000` |
+| Scope | 整站 | `Focus on the settings page`、`Just the homepage` |
+| Depth | Standard（5-8 页） | `--quick`（首页 + 2 页）、`--deep`（10-15 页） |
+| Auth | None | `Sign in as user@example.com`、`Import cookies` |
 
-**If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below).
+**如果用户没有给 URL，且当前在 feature branch：** 自动进入 **diff-aware mode**（见下方 Modes）。
 
-**If no URL is given and you're on main/master:** Ask the user for a URL.
+**如果用户没有给 URL，且当前在 main / master：** 直接向用户要 URL。
 
-**Check for DESIGN.md:**
+**检查是否存在 DESIGN.md：**
 
-Look for `DESIGN.md`, `design-system.md`, or similar in the repo root. If found, read it — all design decisions must be calibrated against it. Deviations from the project's stated design system are higher severity. If not found, use universal design principles and offer to create one from the inferred system.
+在仓库根目录查找 `DESIGN.md`、`design-system.md` 或类似文件。若存在，就必须先读它，后续所有设计判断都要以它为校准基准。任何偏离项目既有设计系统的地方，都应被视为更高严重级别。如果不存在，就按通用设计原则执行，并在合适时机建议用户从当前观察中沉淀一份设计系统文档。
 
-**Check for clean working tree:**
+**检查工作树是否干净：**
 
 ```bash
 git status --porcelain
 ```
 
-If the output is non-empty (working tree is dirty), **STOP** and use AskUserQuestion:
+如果输出非空（工作树不干净），就**停止**并用 AskUserQuestion 提问：
 
 "Your working tree has uncommitted changes. /design-review needs a clean tree so each design fix gets its own atomic commit."
 
@@ -253,11 +253,11 @@ If the output is non-empty (working tree is dirty), **STOP** and use AskUserQues
 - B) Stash my changes — stash, run design review, pop the stash after
 - C) Abort — I'll clean up manually
 
-RECOMMENDATION: Choose A because uncommitted work should be preserved as a commit before design review adds its own fix commits.
+RECOMMENDATION：优先选 A，因为在 design review 自己生成修复提交之前，当前未提交工作应先被安全保存为 commit。
 
-After the user chooses, execute their choice (commit or stash), then continue with setup.
+用户做出选择后，执行对应动作（commit 或 stash），再继续 setup。
 
-**Find the browse binary:**
+**找到 browse 二进制：**
 
 ## SETUP（在任何 browse 命令之前先执行此检查）
 
@@ -278,7 +278,7 @@ fi
 2. Run: `cd <SKILL_DIR> && ./setup`
 3. 如果未安装 `bun`：执行 `curl -fsSL https://bun.sh/install | bash`
 
-**Check test framework (bootstrap if needed):**
+**检查测试框架（如有必要则引导 bootstrap）：**
 
 ## Test Framework Bootstrap
 
@@ -433,7 +433,7 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 
 ---
 
-**Create output directories:**
+**创建输出目录：**
 
 ```bash
 REPORT_DIR=".gstack/design-reports"
@@ -442,7 +442,7 @@ mkdir -p "$REPORT_DIR/screenshots"
 
 ---
 
-## Phases 1-6: Design Audit Baseline
+## Phase 1-6：设计审计基线
 
 ## Modes
 
@@ -775,7 +775,7 @@ Tie everything to user goals and product objectives. Always suggest specific imp
 10. **Depth over breadth.** 5-10 well-documented findings with screenshots and specific suggestions > 20 vague observations.
 11. **Show screenshots to the user.** After every `$B screenshot`, `$B snapshot -a -o`, or `$B responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
 
-Record baseline design score and AI slop score at end of Phase 6.
+在 Phase 6 结束时记录 baseline 设计分和 AI slop 分。
 
 ---
 

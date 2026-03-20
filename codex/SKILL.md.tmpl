@@ -2,11 +2,11 @@
 name: codex
 version: 1.0.0
 description: |
-  OpenAI Codex CLI wrapper — three modes. Code review: independent diff review via
-  codex review with pass/fail gate. Challenge: adversarial mode that tries to break
-  your code. Consult: ask codex anything with session continuity for follow-ups.
-  The "200 IQ autistic developer" second opinion. Use when asked to "codex review",
-  "codex challenge", "ask codex", "second opinion", or "consult codex".
+  OpenAI Codex CLI 封装器，支持三种模式。Code review：通过 `codex review`
+  对 diff 做独立评审，并给出 pass / fail gate。Challenge：以对抗视角尝试
+  找出你的代码会如何在生产环境里失效。Consult：把 Codex 当作一个可持续对话的
+  第二意见来源，支持后续追问。适用于用户说 “codex review”、“codex challenge”、
+  “ask codex”、“second opinion” 或 “consult codex” 的场景。
 allowed-tools:
   - Bash
   - Read
@@ -20,51 +20,49 @@ allowed-tools:
 
 {{BASE_BRANCH_DETECT}}
 
-# /codex — Multi-AI Second Opinion
+# /codex — 多模型第二意见
 
-You are running the `/codex` skill. This wraps the OpenAI Codex CLI to get an independent,
-brutally honest second opinion from a different AI system.
+你正在执行 `/codex` 技能。这个技能会包装 OpenAI Codex CLI，从另一个 AI 系统那里获取独立且不留情面的第二意见。
 
-Codex is the "200 IQ autistic developer" — direct, terse, technically precise, challenges
-assumptions, catches things you might miss. Present its output faithfully, not summarized.
+Codex 的角色设定是：直接、简短、技术精确、会挑战假设，并抓出你可能漏掉的东西。它的输出要尽量忠实呈现，不要擅自总结得面目全非。
 
 ---
 
-## Step 0: Check codex binary
+## Step 0：检查 codex 二进制
 
 ```bash
 CODEX_BIN=$(which codex 2>/dev/null || echo "")
 [ -z "$CODEX_BIN" ] && echo "NOT_FOUND" || echo "FOUND: $CODEX_BIN"
 ```
 
-If `NOT_FOUND`: stop and tell the user:
+如果输出 `NOT_FOUND`：停止，并告诉用户：
 "Codex CLI not found. Install it: `npm install -g @openai/codex` or see https://github.com/openai/codex"
 
 ---
 
-## Step 1: Detect mode
+## Step 1：识别模式
 
-Parse the user's input to determine which mode to run:
+解析用户输入，判断应该进入哪一种模式：
 
-1. `/codex review` or `/codex review <instructions>` — **Review mode** (Step 2A)
-2. `/codex challenge` or `/codex challenge <focus>` — **Challenge mode** (Step 2B)
-3. `/codex` with no arguments — **Auto-detect:**
-   - Check for a diff (with fallback if origin isn't available):
+1. `/codex review` 或 `/codex review <instructions>` → **Review mode**（Step 2A）
+2. `/codex challenge` 或 `/codex challenge <focus>` → **Challenge mode**（Step 2B）
+3. `/codex` 无额外参数 → **自动检测：**
+   - 先检查当前是否有 diff（如果 origin 不可用则回退）：
      `git diff origin/<base> --stat 2>/dev/null | tail -1 || git diff <base> --stat 2>/dev/null | tail -1`
-   - If a diff exists, use AskUserQuestion:
+   - 如果存在 diff，则使用 AskUserQuestion：
      ```
      Codex detected changes against the base branch. What should it do?
      A) Review the diff (code review with pass/fail gate)
      B) Challenge the diff (adversarial — try to break it)
      C) Something else — I'll provide a prompt
      ```
-   - If no diff, check for plan files scoped to the current project:
+   - 如果没有 diff，则检查当前项目范围内是否有 plan 文件：
      `ls -t ~/.claude/plans/*.md 2>/dev/null | xargs grep -l "$(basename $(pwd))" 2>/dev/null | head -1`
-     If no project-scoped match, fall back to: `ls -t ~/.claude/plans/*.md 2>/dev/null | head -1`
-     but warn the user: "Note: this plan may be from a different project."
-   - If a plan file exists, offer to review it
-   - Otherwise, ask: "What would you like to ask Codex?"
-4. `/codex <anything else>` — **Consult mode** (Step 2C), where the remaining text is the prompt
+     如果没有项目级匹配，再回退到：`ls -t ~/.claude/plans/*.md 2>/dev/null | head -1`
+     但要提醒用户：`"Note: this plan may be from a different project."`
+   - 如果找到 plan 文件，就提供“要不要审这个 plan”的选项
+   - 否则直接问：`"What would you like to ask Codex?"`
+4. `/codex <anything else>` → **Consult mode**（Step 2C），剩余文本直接作为 prompt
 
 ---
 

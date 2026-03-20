@@ -2,11 +2,10 @@
 name: retro
 version: 2.0.0
 description: |
-  Weekly engineering retrospective. Analyzes commit history, work patterns,
-  and code quality metrics with persistent history and trend tracking.
-  Team-aware: breaks down per-person contributions with praise and growth areas.
-  Use when asked to "weekly retro", "what did we ship", or "engineering retrospective".
-  Proactively suggest at the end of a work week or sprint.
+  每周工程复盘。它会分析提交历史、工作模式和代码质量指标，并结合持久化历史做趋势跟踪。
+  具备团队视角：能按人拆分贡献，指出值得表扬之处和成长空间。
+  当用户说 “weekly retro”、“what did we ship” 或 “engineering retrospective” 时使用。
+  在一个工作周或 sprint 结束时，应主动建议。
 allowed-tools:
   - Bash
   - Read
@@ -211,24 +210,23 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 将 `SKILL_NAME` 替换为 frontmatter 中的真实技能名，将 `OUTCOME` 替换为 success / error / abort，并根据是否用过 `$B` 将 `USED_BROWSE` 填为 true / false。
 如果无法判断结果状态，则使用 "unknown"。这条命令在后台执行，不应阻塞用户。
 
-## Detect default branch
+## 检测默认分支
 
-Before gathering data, detect the repo's default branch name:
+在收集数据之前，先检测仓库默认分支名：
 `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
 
-If this fails, fall back to `main`. Use the detected name wherever the instructions
-say `origin/<default>` below.
+如果失败，就回退到 `main`。后文凡是出现 `origin/<default>` 的地方，都用这里检测出的分支名替换。
 
 ---
 
 # /retro — Weekly Engineering Retrospective
 
-Generates a comprehensive engineering retrospective analyzing commit history, work patterns, and code quality metrics. Team-aware: identifies the user running the command, then analyzes every contributor with per-person praise and growth opportunities. Designed for a senior IC/CTO-level builder using Claude Code as a force multiplier.
+生成一份完整的工程复盘，分析 commit 历史、工作模式和代码质量指标。它具备团队视角：会先识别是谁在执行这个命令，然后按人分析每位贡献者，包括可表扬之处与成长机会。默认受众是把 Claude Code 当作倍增器来用的 senior IC / CTO 级别 builder。
 
-## User-invocable
-When the user types `/retro`, run this skill.
+## 用户可直接调用
+用户输入 `/retro` 时，就运行这个技能。
 
-## Arguments
+## 参数
 - `/retro` — default: last 7 days
 - `/retro 24h` — last 24 hours
 - `/retro 14d` — last 14 days
@@ -236,13 +234,13 @@ When the user types `/retro`, run this skill.
 - `/retro compare` — compare current window vs prior same-length window
 - `/retro compare 14d` — compare with explicit window
 
-## Instructions
+## 说明
 
-Parse the argument to determine the time window. Default to 7 days if no argument given. All times should be reported in the user's **local timezone** (use the system default — do NOT set `TZ`).
+解析参数以决定时间窗口。若未提供参数，则默认为 7 天。所有时间都必须使用用户的**本地时区**展示（使用系统默认时区，不要手动设置 `TZ`）。
 
-**Midnight-aligned windows:** For day (`d`) and week (`w`) units, compute an absolute start date at local midnight, not a relative string. For example, if today is 2026-03-18 and the window is 7 days: the start date is 2026-03-11. Use `--since="2026-03-11T00:00:00"` for git log queries — the explicit `T00:00:00` suffix ensures git starts from midnight. Without it, git uses the current wall-clock time (e.g., `--since="2026-03-11"` at 11pm means 11pm, not midnight). For week units, multiply by 7 to get days (e.g., `2w` = 14 days back). For hour (`h`) units, use `--since="N hours ago"` since midnight alignment does not apply to sub-day windows.
+**以午夜对齐的时间窗口：** 对 `d`（天）和 `w`（周）单位，要计算本地午夜的绝对起始时间，而不是直接传相对字符串。比如今天是 2026-03-18，窗口是 7 天，那么起始时间应为 2026-03-11。查询 git log 时要使用 `--since="2026-03-11T00:00:00"`；这个显式 `T00:00:00` 能保证从午夜开始。否则 git 会按当前钟点计算（例如晚上 11 点执行 `--since="2026-03-11"`，实际上会从 11pm 开始，而不是午夜）。对于周单位，先乘以 7 换算成天；对于小时单位（`h`），则可以直接用 `--since="N hours ago"`，因为小时级窗口不需要午夜对齐。
 
-**Argument validation:** If the argument doesn't match a number followed by `d`, `h`, or `w`, the word `compare`, or `compare` followed by a number and `d`/`h`/`w`, show this usage and stop:
+**参数校验：** 如果参数不符合以下格式之一：数字 + `d` / `h` / `w`，单独一个 `compare`，或 `compare` 后跟数字 + `d` / `h` / `w`，就展示下面这段用法说明并停止：
 ```
 Usage: /retro [window]
   /retro              — last 7 days (default)
@@ -253,19 +251,19 @@ Usage: /retro [window]
   /retro compare 14d  — compare with explicit window
 ```
 
-### Step 1: Gather Raw Data
+### Step 1：收集原始数据
 
-First, fetch origin and identify the current user:
+先 fetch origin，并识别当前用户：
 ```bash
 git fetch origin <default> --quiet
-# Identify who is running the retro
+# 确认是谁在执行 retro
 git config user.name
 git config user.email
 ```
 
-The name returned by `git config user.name` is **"you"** — the person reading this retro. All other authors are teammates. Use this to orient the narrative: "your" commits vs teammate contributions.
+`git config user.name` 返回的名字就是 **“你”**，也就是正在阅读这份 retro 的人。其他作者都应视为队友。后续叙述要以此为中心区分：“你的提交” 与 “队友的贡献”。
 
-Run ALL of these git commands in parallel (they are independent):
+把下面这些 git 命令全部并行执行（它们彼此独立）：
 
 ```bash
 # 1. All commits in window with timestamps, subject, hash, AUTHOR, files changed, insertions, deletions
@@ -310,9 +308,9 @@ cat ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 git log origin/<default> --since="<window>" --format="" --name-only | grep -E '\.(test|spec)\.' | sort -u | wc -l
 ```
 
-### Step 2: Compute Metrics
+### Step 2：计算指标
 
-Calculate and present these metrics in a summary table:
+计算并用表格展示以下指标：
 
 | Metric | Value |
 |--------|-------|
@@ -331,7 +329,7 @@ Calculate and present these metrics in a summary table:
 | Greptile signal | N% (Y catches, Z FPs) |
 | Test Health | N total tests · M added this period · K regression tests |
 
-Then show a **per-author leaderboard** immediately below:
+然后紧接着展示一个**按作者拆分的排行榜**：
 
 ```
 Contributor         Commits   +/-          Top area
@@ -340,7 +338,7 @@ alice                    12   +800/-150    app/services/
 bob                       3   +120/-40     tests/
 ```
 
-Sort by commits descending. The current user (from `git config user.name`) always appears first, labeled "You (name)".
+按 commit 数降序排序。当前用户（来自 `git config user.name`）始终排在最前，并标注为 `"You (name)"`。
 
 **Greptile signal (if history exists):** Read `~/.gstack/greptile-history.md` (fetched in Step 1, command 8). Filter entries within the retro time window by date. Count entries by type: `fix`, `fp`, `already-fixed`. Compute signal ratio: `(fix + already-fixed) / (fix + already-fixed + fp)`. If no entries exist in the window or the file doesn't exist, skip the Greptile metric row. Skip unparseable lines silently.
 
