@@ -1,358 +1,271 @@
-# Architecture
+# gstack 架构说明
 
-This document explains **why** gstack is built the way it is. For setup and commands, see CLAUDE.md. For contributing, see CONTRIBUTING.md.
+本文概述 gstack 的主要组成、数据流和设计原则，帮助你理解它为什么能把一组 Markdown 技能组织成可复用的 AI 工程工作流。
 
-## The core idea
+## 目标
 
-gstack gives Claude Code a persistent browser and a set of opinionated workflow skills. The browser is the hard part — everything else is Markdown.
+gstack 解决的不是“让模型多会一点”，而是“让模型在真实软件开发流程中扮演稳定角色”。它把 brainstorm、plan、review、qa、ship、retro 等不同阶段拆成独立技能，每个技能都有自己的职责、触发条件和输出格式。
 
-The key insight: an AI agent interacting with a browser needs **sub-second latency** and **persistent state**. If every command cold-starts a browser, you're waiting 3-5 seconds per tool call. If the browser dies between commands, you lose cookies, tabs, and login sessions. So gstack runs a long-lived Chromium daemon that the CLI talks to over localhost HTTP.
+系统目标可以概括为四点：
 
-```
-Claude Code                     gstack
-─────────                      ──────
-                               ┌──────────────────────┐
-  Tool call: $B snapshot -i    │  CLI (compiled binary)│
-  ─────────────────────────→   │  • reads state file   │
-                               │  • POST /command      │
-                               │    to localhost:PORT   │
-                               └──────────┬───────────┘
-                                          │ HTTP
-                               ┌──────────▼───────────┐
-                               │  Server (Bun.serve)   │
-                               │  • dispatches command  │
-                               │  • talks to Chromium   │
-                               │  • returns plain text  │
-                               └──────────┬───────────┘
-                                          │ CDP
-                               ┌──────────▼───────────┐
-                               │  Chromium (headless)   │
-                               │  • persistent tabs     │
-                               │  • cookies carry over  │
-                               │  • 30min idle timeout  │
-                               └───────────────────────┘
+1. 让技能可以像团队角色一样组合
+2. 让浏览器、测试和评审具备真实可执行性
+3. 让文档生成、技能分发和宿主适配可维护
+4. 让风险操作有明确的边界和护栏
+
+## 高层结构
+
+```text
+用户请求
+   │
+   ▼
+代理宿主（Claude Code / Codex / 其他支持 SKILL.md 的环境）
+   │
+   ├── 读取技能文档（SKILL.md）
+   ├── 执行技能中的 Bash / 工具说明
+   └── 根据技能约束完成工作流
+            │
+            ├── gstack 技能模板与生成器
+            ├── browse 浏览器二进制
+            ├── 测试与评测系统
+            └── 本地配置与遥测
 ```
 
-First call starts everything (~3s). Every call after: ~100-200ms.
+## 核心模块
 
-## Why Bun
+### 1. 技能层
 
-Node.js would work. Bun is better here for three reasons:
+每个技能目录对应一类工作流，例如：
 
-1. **Compiled binaries.** `bun build --compile` produces a single ~58MB executable. No `node_modules` at runtime, no `npx`, no PATH configuration. The binary just runs. This matters because gstack installs into `~/.claude/skills/` where users don't expect to manage a Node.js project.
+- `office-hours/`
+- `plan-ceo-review/`
+- `plan-eng-review/`
+- `review/`
+- `qa/`
+- `ship/`
+- `retro/`
 
-2. **Native SQLite.** Cookie decryption reads Chromium's SQLite cookie database directly. Bun has `new Database()` built in — no `better-sqlite3`, no native addon compilation, no gyp. One less thing that breaks on different machines.
+技能的核心文件是 `SKILL.md`，但真正的维护入口是 `SKILL.md.tmpl`。模板负责承载共享结构、宿主差异和占位符，生成后的 `SKILL.md` 才是最终被代理读取的文档。
 
-3. **Native TypeScript.** The server runs as `bun run server.ts` during development. No compilation step, no `ts-node`, no source maps to debug. The compiled binary is for deployment; source files are for development.
+### 2. 模板生成层
 
-4. **Built-in HTTP server.** `Bun.serve()` is fast, simple, and doesn't need Express or Fastify. The server handles ~10 routes total. A framework would be overhead.
+`scripts/gen-skill-docs.ts` 是生成器。它负责：
 
-The bottleneck is always Chromium, not the CLI or server. Bun's startup speed (~1ms for the compiled binary vs ~100ms for Node) is nice but not the reason we chose it. The compiled binary and native SQLite are.
+- 读取 `*.tmpl`
+- 解析 `{{PREAMBLE}}`、`{{BROWSE_SETUP}}`、`{{COMMAND_REFERENCE}}` 等占位符
+- 根据宿主类型（Claude / Codex）注入不同路径和说明
+- 输出最终 `SKILL.md`
 
-## The daemon model
+这样做的原因是：多个技能共享大量样板逻辑，例如会话前言、升级检测、浏览器路径、提问格式要求等。把它们集中在生成器里维护，比在每个技能里复制粘贴更稳。
 
-### Why not start a browser per command?
+### 3. 浏览器层
 
-Playwright can launch Chromium in ~2-3 seconds. For a single screenshot, that's fine. For a QA session with 20+ commands, it's 40+ seconds of browser startup overhead. Worse: you lose all state between commands. Cookies, localStorage, login sessions, open tabs — all gone.
+`browse/` 提供高性能、持久化的无头浏览器能力。和 MCP 方式不同，gstack 走的是：
 
-The daemon model means:
+- 编译后的本地 CLI
+- 后台持久化服务端
+- 基于 Playwright 的浏览器执行
+- 纯文本输入输出
 
-- **Persistent state.** Log in once, stay logged in. Open a tab, it stays open. localStorage persists across commands.
-- **Sub-second commands.** After the first call, every command is just an HTTP POST. ~100-200ms round-trip including Chromium's work.
-- **Automatic lifecycle.** The server auto-starts on first use, auto-shuts down after 30 minutes idle. No process management needed.
+这一层是 `/browse`、`/qa`、`/design-review`、`/setup-browser-cookies` 等技能的基础设施。
 
-### State file
+### 4. 测试与评测层
 
-The server writes `.gstack/browse.json` (atomic write via tmp + rename, mode 0o600):
+项目的质量保障分为三层：
 
-```json
-{ "pid": 12345, "port": 34567, "token": "uuid-v4", "startedAt": "...", "binaryVersion": "abc123" }
+- **静态测试**：验证命令、模板、生成结果和引用关系
+- **E2E**：通过 `claude -p` 模拟真实技能会话
+- **LLM 评测**：用模型判断生成文档是否清晰、完整、可执行
+
+这种分层使得 gstack 不只验证“代码能不能跑”，还验证“技能作为提示系统是否还能正常工作”。
+
+### 5. 本地状态与配置层
+
+gstack 会把运行态信息写入本地目录，例如：
+
+- `~/.gstack/`：会话和配置状态
+- `~/.gstack-dev/`：评测、日志与诊断产物
+- 项目内 `.gstack/`：browse 的工作区状态、console/network/dialog 日志
+
+它的原则是：尽量把运行态落在本地、按工作区隔离，避免不同项目互相污染。
+
+## 目录结构
+
+```text
+gstack/
+├── browse/                 # 浏览器 CLI 与服务端
+├── scripts/                # 生成器、检查器、开发工具
+├── test/                   # 技能校验、E2E、LLM eval
+├── review/                 # /review 技能
+├── ship/                   # /ship 技能
+├── qa/                     # /qa 技能
+├── qa-only/                # /qa-only 技能
+├── design-review/          # /design-review 技能
+├── document-release/       # /document-release 技能
+├── office-hours/           # /office-hours 技能
+├── plan-ceo-review/        # /plan-ceo-review 技能
+├── plan-eng-review/        # /plan-eng-review 技能
+├── plan-design-review/     # /plan-design-review 技能
+├── investigate/            # /investigate 技能
+├── retro/                  # /retro 技能
+├── SKILL.md.tmpl           # 根技能模板
+└── package.json            # 构建与测试脚本
 ```
 
-The CLI reads this file to find the server. If the file is missing, stale, or the PID is dead, the CLI spawns a new server.
+## 典型数据流
 
-### Port selection
+### 文档生成流
 
-Random port between 10000-60000 (retry up to 5 on collision). This means 10 Conductor workspaces can each run their own browse daemon with zero configuration and zero port conflicts. The old approach (scanning 9400-9409) broke constantly in multi-workspace setups.
-
-### Version auto-restart
-
-The build writes `git rev-parse HEAD` to `browse/dist/.version`. On each CLI invocation, if the binary's version doesn't match the running server's `binaryVersion`, the CLI kills the old server and starts a new one. This prevents the "stale binary" class of bugs entirely — rebuild the binary, next command picks it up automatically.
-
-## Security model
-
-### Localhost only
-
-The HTTP server binds to `localhost`, not `0.0.0.0`. It's not reachable from the network.
-
-### Bearer token auth
-
-Every server session generates a random UUID token, written to the state file with mode 0o600 (owner-only read). Every HTTP request must include `Authorization: Bearer <token>`. If the token doesn't match, the server returns 401.
-
-This prevents other processes on the same machine from talking to your browse server. The cookie picker UI (`/cookie-picker`) and health check (`/health`) are exempt — they're localhost-only and don't execute commands.
-
-### Cookie security
-
-Cookies are the most sensitive data gstack handles. The design:
-
-1. **Keychain access requires user approval.** First cookie import per browser triggers a macOS Keychain dialog. The user must click "Allow" or "Always Allow." gstack never silently accesses credentials.
-
-2. **Decryption happens in-process.** Cookie values are decrypted in memory (PBKDF2 + AES-128-CBC), loaded into the Playwright context, and never written to disk in plaintext. The cookie picker UI never displays cookie values — only domain names and counts.
-
-3. **Database is read-only.** gstack copies the Chromium cookie DB to a temp file (to avoid SQLite lock conflicts with the running browser) and opens it read-only. It never modifies your real browser's cookie database.
-
-4. **Key caching is per-session.** The Keychain password + derived AES key are cached in memory for the server's lifetime. When the server shuts down (idle timeout or explicit stop), the cache is gone.
-
-5. **No cookie values in logs.** Console, network, and dialog logs never contain cookie values. The `cookies` command outputs cookie metadata (domain, name, expiry) but values are truncated.
-
-### Shell injection prevention
-
-The browser registry (Comet, Chrome, Arc, Brave, Edge) is hardcoded. Database paths are constructed from known constants, never from user input. Keychain access uses `Bun.spawn()` with explicit argument arrays, not shell string interpolation.
-
-## The ref system
-
-Refs (`@e1`, `@e2`, `@c1`) are how the agent addresses page elements without writing CSS selectors or XPath.
-
-### How it works
-
-```
-1. Agent runs: $B snapshot -i
-2. Server calls Playwright's page.accessibility.snapshot()
-3. Parser walks the ARIA tree, assigns sequential refs: @e1, @e2, @e3...
-4. For each ref, builds a Playwright Locator: getByRole(role, { name }).nth(index)
-5. Stores Map<string, RefEntry> on the BrowserManager instance (role + name + Locator)
-6. Returns the annotated tree as plain text
-
-Later:
-7. Agent runs: $B click @e3
-8. Server resolves @e3 → Locator → locator.click()
+```text
+SKILL.md.tmpl / */SKILL.md.tmpl
+   │
+   ▼
+scripts/gen-skill-docs.ts
+   │
+   ├── 注入共享前言
+   ├── 注入宿主路径
+   ├── 注入命令参考与快照说明
+   └── 输出 SKILL.md
 ```
 
-### Why Locators, not DOM mutation
+### 技能执行流
 
-The obvious approach is to inject `data-ref="@e1"` attributes into the DOM. This breaks on:
-
-- **CSP (Content Security Policy).** Many production sites block DOM modification from scripts.
-- **React/Vue/Svelte hydration.** Framework reconciliation can strip injected attributes.
-- **Shadow DOM.** Can't reach inside shadow roots from the outside.
-
-Playwright Locators are external to the DOM. They use the accessibility tree (which Chromium maintains internally) and `getByRole()` queries. No DOM mutation, no CSP issues, no framework conflicts.
-
-### Ref lifecycle
-
-Refs are cleared on navigation (the `framenavigated` event on the main frame). This is correct — after navigation, all locators are stale. The agent must run `snapshot` again to get fresh refs. This is by design: stale refs should fail loudly, not click the wrong element.
-
-### Ref staleness detection
-
-SPAs can mutate the DOM without triggering `framenavigated` (e.g. React router transitions, tab switches, modal opens). This makes refs stale even though the page URL didn't change. To catch this, `resolveRef()` performs an async `count()` check before using any ref:
-
-```
-resolveRef(@e3) → entry = refMap.get("e3")
-                → count = await entry.locator.count()
-                → if count === 0: throw "Ref @e3 is stale — element no longer exists. Run 'snapshot' to get fresh refs."
-                → if count > 0: return { locator }
+```text
+用户输入
+   │
+   ▼
+代理读取 SKILL.md
+   │
+   ├── 运行前言 Bash
+   ├── 识别当前阶段和约束
+   ├── 必要时调用 browse / git / 测试命令
+   └── 产出结论、修复或后续动作
 ```
 
-This fails fast (~5ms overhead) instead of letting Playwright's 30-second action timeout expire on a missing element. The `RefEntry` stores `role` and `name` metadata alongside the Locator so the error message can tell the agent what the element was.
+### 浏览器执行流
 
-### Cursor-interactive refs (@c)
-
-The `-C` flag finds elements that are clickable but not in the ARIA tree — things styled with `cursor: pointer`, elements with `onclick` attributes, or custom `tabindex`. These get `@c1`, `@c2` refs in a separate namespace. This catches custom components that frameworks render as `<div>` but are actually buttons.
-
-## Logging architecture
-
-Three ring buffers (50,000 entries each, O(1) push):
-
-```
-Browser events → CircularBuffer (in-memory) → Async flush to .gstack/*.log
-```
-
-Console messages, network requests, and dialog events each have their own buffer. Flushing happens every 1 second — the server appends only new entries since the last flush. This means:
-
-- HTTP request handling is never blocked by disk I/O
-- Logs survive server crashes (up to 1 second of data loss)
-- Memory is bounded (50K entries × 3 buffers)
-- Disk files are append-only, readable by external tools
-
-The `console`, `network`, and `dialog` commands read from the in-memory buffers, not disk. Disk files are for post-mortem debugging.
-
-## SKILL.md template system
-
-### The problem
-
-SKILL.md files tell Claude how to use the browse commands. If the docs list a flag that doesn't exist, or miss a command that was added, the agent hits errors. Hand-maintained docs always drift from code.
-
-### The solution
-
-```
-SKILL.md.tmpl          (human-written prose + placeholders)
-       ↓
-gen-skill-docs.ts      (reads source code metadata)
-       ↓
-SKILL.md               (committed, auto-generated sections)
+```text
+$B <command>
+   │
+   ▼
+browse CLI
+   │
+   ▼
+本地 HTTP 服务
+   │
+   ▼
+Playwright
+   │
+   ▼
+Chromium
 ```
 
-Templates contain the workflows, tips, and examples that require human judgment. Placeholders are filled from source code at build time:
+## 设计原则
 
-| Placeholder | Source | What it generates |
-|-------------|--------|-------------------|
-| `{{COMMAND_REFERENCE}}` | `commands.ts` | Categorized command table |
-| `{{SNAPSHOT_FLAGS}}` | `snapshot.ts` | Flag reference with examples |
-| `{{PREAMBLE}}` | `gen-skill-docs.ts` | Startup block: update check, session tracking, contributor mode, AskUserQuestion format |
-| `{{BROWSE_SETUP}}` | `gen-skill-docs.ts` | Binary discovery + setup instructions |
-| `{{BASE_BRANCH_DETECT}}` | `gen-skill-docs.ts` | Dynamic base branch detection for PR-targeting skills (ship, review, qa, plan-ceo-review) |
-| `{{QA_METHODOLOGY}}` | `gen-skill-docs.ts` | Shared QA methodology block for /qa and /qa-only |
-| `{{DESIGN_METHODOLOGY}}` | `gen-skill-docs.ts` | Shared design audit methodology for /plan-design-review and /design-review |
-| `{{REVIEW_DASHBOARD}}` | `gen-skill-docs.ts` | Review Readiness Dashboard for /ship pre-flight |
-| `{{TEST_BOOTSTRAP}}` | `gen-skill-docs.ts` | Test framework detection, bootstrap, CI/CD setup for /qa, /ship, /design-review |
+### 1. 技能即角色
 
-This is structurally sound — if a command exists in code, it appears in docs. If it doesn't exist, it can't appear.
+gstack 不是把一堆工具列给模型，而是直接给模型一个“职位说明书”。每个技能都应回答三个问题：
 
-### The preamble
+- 你现在扮演谁
+- 你什么时候该介入
+- 你该用什么标准判断结果是否合格
 
-Every skill starts with a `{{PREAMBLE}}` block that runs before the skill's own logic. It handles four things in a single bash command:
+### 2. 模板优先于复制
 
-1. **Update check** — calls `gstack-update-check`, reports if an upgrade is available.
-2. **Session tracking** — touches `~/.gstack/sessions/$PPID` and counts active sessions (files modified in the last 2 hours). When 3+ sessions are running, all skills enter "ELI16 mode" — every question re-grounds the user on context because they're juggling windows.
-3. **Contributor mode** — reads `gstack_contributor` from config. When true, the agent files casual field reports to `~/.gstack/contributor-logs/` when gstack itself misbehaves.
-4. **AskUserQuestion format** — universal format: context, question, `RECOMMENDATION: Choose X because ___`, lettered options. Consistent across all skills.
+凡是多个技能共享的前言、行为规范、交互格式，都应该放在生成器或模板占位符里，而不是复制到每个文档中。这样既减少漂移，也便于多宿主适配。
 
-### Why committed, not generated at runtime?
+### 3. 真实浏览器，不做假交互
 
-Three reasons:
+QA、设计审查和登录态测试必须建立在真实浏览器交互之上。gstack 明确选择 Playwright + 持久化 CLI，而不是纯文本模拟或高开销的协议层封装。
 
-1. **Claude reads SKILL.md at skill load time.** There's no build step when a user invokes `/browse`. The file must already exist and be correct.
-2. **CI can validate freshness.** `gen:skill-docs --dry-run` + `git diff --exit-code` catches stale docs before merge.
-3. **Git blame works.** You can see when a command was added and in which commit.
+### 4. 完整性优先
 
-### Template test tiers
+gstack 的许多技能都围绕 Completeness Principle 设计：既然 AI 让边际成本大幅下降，就不要默认做“差不多够用”的 80 分方案。只要问题规模还是“湖”，就应该优先做完整实现。
 
-| Tier | What | Cost | Speed |
-|------|------|------|-------|
-| 1 — Static validation | Parse every `$B` command in SKILL.md, validate against registry | Free | <2s |
-| 2 — E2E via `claude -p` | Spawn real Claude session, run each skill, check for errors | ~$3.85 | ~20min |
-| 3 — LLM-as-judge | Sonnet scores docs on clarity/completeness/actionability | ~$0.15 | ~30s |
+### 5. 宿主无关
 
-Tier 1 runs on every `bun test`. Tiers 2+3 are gated behind `EVALS=1`. The idea is: catch 95% of issues for free, use LLMs only for judgment calls.
+技能文档不能写死 Claude 私有假设。gstack 会为不同宿主生成不同的输出路径和说明，以便同一套技能可以在 Claude Code、Codex 等环境中复用。
 
-## Command dispatch
+### 6. 本地优先、显式状态
 
-Commands are categorized by side effects:
+工作区状态、评测输出、会话信息尽量保存在本地并按目录隔离；危险操作要显式确认，不靠隐式猜测。
 
-- **READ** (text, html, links, console, cookies, ...): No mutations. Safe to retry. Returns page state.
-- **WRITE** (goto, click, fill, press, ...): Mutates page state. Not idempotent.
-- **META** (snapshot, screenshot, tabs, chain, ...): Server-level operations that don't fit neatly into read/write.
+## browse 子系统
 
-This isn't just organizational. The server uses it for dispatch:
+浏览器子系统是整个架构中最像“基础设施”的部分。它负责把代理的文本指令变成真实网页操作。
 
-```typescript
-if (READ_COMMANDS.has(cmd))  → handleReadCommand(cmd, args, bm)
-if (WRITE_COMMANDS.has(cmd)) → handleWriteCommand(cmd, args, bm)
-if (META_COMMANDS.has(cmd))  → handleMetaCommand(cmd, args, bm, shutdown)
-```
+关键能力包括：
 
-The `help` command returns all three sets so agents can self-discover available commands.
+- 基于可访问性树的 `@ref` 引用选择
+- 持久化浏览器会话
+- 控制台、网络、弹窗日志捕获
+- cookie 导入
+- 可见浏览器 handoff / resume
+- 多工作区隔离
 
-## Error philosophy
+与技能层的关系是：技能负责决策和流程，browse 负责执行和观察。
 
-Errors are for AI agents, not humans. Every error message must be actionable:
+## 质量保障架构
 
-- "Element not found" → "Element not found or not interactable. Run `snapshot -i` to see available elements."
-- "Selector matched multiple elements" → "Selector matched multiple elements. Use @refs from `snapshot` instead."
-- Timeout → "Navigation timed out after 30s. The page may be slow or the URL may be wrong."
+### 静态校验
 
-Playwright's native errors are rewritten through `wrapError()` to strip internal stack traces and add guidance. The agent should be able to read the error and know what to do next without human intervention.
+静态校验重点保证：
 
-### Crash recovery
+- 技能文档里引用的命令真实存在
+- 模板生成结果与预期一致
+- 文档描述质量达标
 
-The server doesn't try to self-heal. If Chromium crashes (`browser.on('disconnected')`), the server exits immediately. The CLI detects the dead server on the next command and auto-restarts. This is simpler and more reliable than trying to reconnect to a half-dead browser process.
+### 端到端
 
-## E2E test infrastructure
+E2E 用真实 `claude -p` 会话执行技能，因此能捕捉到静态分析无法发现的问题，例如：
 
-### Session runner (`test/helpers/session-runner.ts`)
+- 提示顺序改变导致行为偏移
+- 生成文档上下文过长或过短
+- 真实工具调用路径与预期不一致
 
-E2E tests spawn `claude -p` as a completely independent subprocess — not via the Agent SDK, which can't nest inside Claude Code sessions. The runner:
+### LLM-as-judge
 
-1. Writes the prompt to a temp file (avoids shell escaping issues)
-2. Spawns `sh -c 'cat prompt | claude -p --output-format stream-json --verbose'`
-3. Streams NDJSON from stdout for real-time progress
-4. Races against a configurable timeout
-5. Parses the full NDJSON transcript into structured results
+这一步不是验证代码逻辑，而是验证“写给模型看的文档”是否足够好。它本质上是对提示质量做回归测试。
 
-The `parseNDJSON()` function is pure — no I/O, no side effects — making it independently testable.
+## 多宿主输出
 
-### Observability data flow
+gstack 既支持 Claude Code，也支持 Codex 等支持 `SKILL.md` 的宿主。生成器会根据 `--host` 参数调整：
 
-```
-  skill-e2e.test.ts
-        │
-        │ generates runId, passes testName + runId to each call
-        │
-  ┌─────┼──────────────────────────────┐
-  │     │                              │
-  │  runSkillTest()              evalCollector
-  │  (session-runner.ts)         (eval-store.ts)
-  │     │                              │
-  │  per tool call:              per addTest():
-  │  ┌──┼──────────┐              savePartial()
-  │  │  │          │                   │
-  │  ▼  ▼          ▼                   ▼
-  │ [HB] [PL]    [NJ]          _partial-e2e.json
-  │  │    │        │             (atomic overwrite)
-  │  │    │        │
-  │  ▼    ▼        ▼
-  │ e2e-  prog-  {name}
-  │ live  ress   .ndjson
-  │ .json .log
-  │
-  │  on failure:
-  │  {name}-failure.json
-  │
-  │  ALL files in ~/.gstack-dev/
-  │  Run dir: e2e-runs/{runId}/
-  │
-  │         eval-watch.ts
-  │              │
-  │        ┌─────┴─────┐
-  │     read HB     read partial
-  │        └─────┬─────┘
-  │              ▼
-  │        render dashboard
-  │        (stale >10min? warn)
-```
+- 技能根目录路径
+- 本地安装路径
+- 二进制路径
+- 前言说明中的宿主专属文案
 
-**Split ownership:** session-runner owns the heartbeat (current test state), eval-store owns partial results (completed test state). The watcher reads both. Neither component knows about the other — they share data only through the filesystem.
+同一份模板因此可以稳定产出多份宿主定制文档。
 
-**Non-fatal everything:** All observability I/O is wrapped in try/catch. A write failure never causes a test to fail. The tests themselves are the source of truth; observability is best-effort.
+## 风险控制
 
-**Machine-readable diagnostics:** Each test result includes `exit_reason` (success, timeout, error_max_turns, error_api, exit_code_N), `timeout_at_turn`, and `last_tool_call`. This enables `jq` queries like:
-```bash
-jq '.tests[] | select(.exit_reason == "timeout") | .last_tool_call' ~/.gstack-dev/evals/_partial-e2e.json
-```
+风险控制主要来自三层：
 
-### Eval persistence (`test/helpers/eval-store.ts`)
+1. **技能层约束**：如 `/careful`、`/freeze`、`/guard`
+2. **显式确认**：遇到破坏性操作必须先确认
+3. **测试与评测**：在技能文档和工具链层面建立回归防线
 
-The `EvalCollector` accumulates test results and writes them in two ways:
+这意味着 gstack 不把“代理会自己小心”当作安全策略，而是把安全要求写成显式流程。
 
-1. **Incremental:** `savePartial()` writes `_partial-e2e.json` after each test (atomic: write `.tmp`, `fs.renameSync`). Survives kills.
-2. **Final:** `finalize()` writes a timestamped eval file (e.g. `e2e-20260314-143022.json`). The partial file is never cleaned up — it persists alongside the final file for observability.
+## 为什么是 Markdown
 
-`eval:compare` diffs two eval runs. `eval:summary` aggregates stats across all runs in `~/.gstack-dev/evals/`.
+Markdown 在这里不是文档格式，而是一种最低摩擦的工作流描述语言。它同时具备：
 
-### Test tiers
+- 可读性
+- 可版本管理
+- 可被代理直接消费
+- 易于通过模板系统生成
 
-| Tier | What | Cost | Speed |
-|------|------|------|-------|
-| 1 — Static validation | Parse `$B` commands, validate against registry, observability unit tests | Free | <5s |
-| 2 — E2E via `claude -p` | Spawn real Claude session, run each skill, scan for errors | ~$3.85 | ~20min |
-| 3 — LLM-as-judge | Sonnet scores docs on clarity/completeness/actionability | ~$0.15 | ~30s |
+相比更重的 DSL 或协议层，Markdown 更容易被人和模型同时理解，也更适合频繁迭代。
 
-Tier 1 runs on every `bun test`. Tiers 2+3 are gated behind `EVALS=1`. The idea: catch 95% of issues for free, use LLMs only for judgment calls and integration testing.
+## 给贡献者的建议
 
-## What's intentionally not here
+如果你要修改架构相关内容，优先关注：
 
-- **No WebSocket streaming.** HTTP request/response is simpler, debuggable with curl, and fast enough. Streaming would add complexity for marginal benefit.
-- **No MCP protocol.** MCP adds JSON schema overhead per request and requires a persistent connection. Plain HTTP + plain text output is lighter on tokens and easier to debug.
-- **No multi-user support.** One server per workspace, one user. The token auth is defense-in-depth, not multi-tenancy.
-- **No Windows/Linux cookie decryption.** macOS Keychain is the only supported credential store. Linux (GNOME Keyring/kwallet) and Windows (DPAPI) are architecturally possible but not implemented.
-- **No iframe support.** Playwright can handle iframes but the ref system doesn't cross frame boundaries yet. This is the most-requested missing feature.
+- 这是不是应该放进模板/生成器，而不是单个技能里
+- 这是否改变了技能在真实会话中的行为
+- 这是否需要一条新的静态测试或 E2E 评测来兜底
+- 这是否引入了宿主耦合或目录耦合
+
+gstack 的核心不是“某个技能很聪明”，而是“整套系统长期保持可演进、可验证、可组合”。

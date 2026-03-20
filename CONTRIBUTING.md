@@ -1,353 +1,208 @@
-# Contributing to gstack
+# 参与 gstack 开发
 
-Thanks for wanting to make gstack better. Whether you're fixing a typo in a skill prompt or building an entirely new workflow, this guide will get you up and running fast.
+感谢你愿意改进 gstack。无论你只是修一个提示词拼写错误，还是想新增整条工作流，这份文档都会告诉你怎么快速进入开发状态。
 
-## Quick start
+## 快速开始
 
-gstack skills are Markdown files that Claude Code discovers from a `skills/` directory. Normally they live at `~/.claude/skills/gstack/` (your global install). But when you're developing gstack itself, you want Claude Code to use the skills *in your working tree* — so edits take effect instantly without copying or deploying anything.
+gstack 的技能本质上是 Claude Code 会自动发现的 Markdown 文档。正常情况下，它们安装在 `~/.claude/skills/gstack/`。开发 gstack 本身时，更方便的方式是让 Claude 直接读取你当前工作树里的技能文件，这样修改后立刻生效，不需要额外复制或发布。
 
-That's what dev mode does. It symlinks your repo into the local `.claude/skills/` directory so Claude Code reads skills straight from your checkout.
+开发模式会把当前仓库通过软链接接入本地 `.claude/skills/` 目录：
 
 ```bash
 git clone <repo> && cd gstack
-bun install                    # install dependencies
-bin/dev-setup                  # activate dev mode
+bun install
+bin/dev-setup
 ```
 
-Now edit any `SKILL.md`, invoke it in Claude Code (e.g. `/review`), and see your changes live. When you're done developing:
+之后你修改任意 `SKILL.md` 或模板文件，都可以立即在 Claude Code 里调用对应技能验证效果。完成开发后执行：
 
 ```bash
-bin/dev-teardown               # deactivate — back to your global install
+bin/dev-teardown
 ```
 
 ## Contributor mode
 
-Contributor mode turns gstack into a self-improving tool. Enable it and Claude Code
-will periodically reflect on its gstack experience — rating it 0-10 at the end of
-each major workflow step. When something isn't a 10, it thinks about why and files
-a report to `~/.gstack/contributor-logs/` with what happened, repro steps, and what
-would make it better.
+Contributor mode 会让 gstack 变成一个“会自我反馈”的工具。开启后，Claude Code 会在每个主要工作流阶段结束时给当前体验打分；只要不是 10 分，就会把问题、复现方式和改进建议写入 `~/.gstack/contributor-logs/`。
+
+开启方式：
 
 ```bash
 ~/.claude/skills/gstack/bin/gstack-config set gstack_contributor true
 ```
 
-The logs are for **you**. When something bugs you enough to fix, the report is
-already written. Fork gstack, symlink your fork into the project where you hit
-the issue, fix it, and open a PR.
+这些日志是给你自己看的。当你决定修某个问题时，复现场景和改进建议往往已经现成写好了。
 
-### The contributor workflow
+## 推荐贡献方式
 
-1. **Use gstack normally** — contributor mode reflects and logs issues automatically
-2. **Check your logs:** `ls ~/.gstack/contributor-logs/`
-3. **Fork and clone gstack** (if you haven't already)
-4. **Symlink your fork into the project where you hit the bug:**
-   ```bash
-   # In your core project (the one where gstack annoyed you)
-   ln -sfn /path/to/your/gstack-fork .claude/skills/gstack
-   cd .claude/skills/gstack && bun install && bun run build
-   ```
-5. **Fix the issue** — your changes are live immediately in this project
-6. **Test by actually using gstack** — do the thing that annoyed you, verify it's fixed
-7. **Open a PR from your fork**
+1. 像平时一样使用 gstack
+2. 查看 `~/.gstack/contributor-logs/`
+3. Fork 并克隆 gstack
+4. 在你真正感受到问题的项目里，把 `.claude/skills/gstack` 软链接到你的 fork
+5. 直接修复问题
+6. 用真实工作流验证修复
+7. 提交 PR
 
-This is the best way to contribute: fix gstack while doing your real work, in the
-project where you actually felt the pain.
+这是最有效的贡献方式：在你真实使用 gstack 的地方修 gstack，而不是在脱离上下文的演示环境中修。
 
-### Session awareness
+## 会话感知
 
-When you have 3+ gstack sessions open simultaneously, every question tells you which project, which branch, and what's happening. No more staring at a question thinking "wait, which window is this?" The format is consistent across all 15 skills.
+当你同时开了多个 gstack 会话时，提问格式会显式带出项目名、分支名和当前任务，避免“这到底是哪一个窗口”的混乱。这个格式在各技能之间保持一致。
 
-## Working on gstack inside the gstack repo
+## 在 gstack 仓库里测试 gstack
 
-When you're editing gstack skills and want to test them by actually using gstack
-in the same repo, `bin/dev-setup` wires this up. It creates `.claude/skills/`
-symlinks (gitignored) pointing back to your working tree, so Claude Code uses
-your local edits instead of the global install.
+`bin/dev-setup` 会在仓库内创建 `.claude/skills/` 软链接（已加入 `.gitignore`），让 Claude Code 直接读取当前工作树里的技能：
 
-```
-gstack/                          <- your working tree
-├── .claude/skills/              <- created by dev-setup (gitignored)
-│   ├── gstack -> ../../         <- symlink back to repo root
+```text
+gstack/
+├── .claude/skills/
+│   ├── gstack -> ../../
 │   ├── review -> gstack/review
 │   ├── ship -> gstack/ship
-│   └── ...                      <- one symlink per skill
+│   └── ...
 ├── review/
-│   └── SKILL.md                 <- edit this, test with /review
 ├── ship/
-│   └── SKILL.md
 ├── browse/
-│   ├── src/                     <- TypeScript source
-│   └── dist/                    <- compiled binary (gitignored)
 └── ...
 ```
 
-## Day-to-day workflow
+这样你改完就能立刻在当前仓库里调用 `/review`、`/ship` 等技能验证效果。
+
+## 日常开发流程
 
 ```bash
-# 1. Enter dev mode
 bin/dev-setup
 
-# 2. Edit a skill
-vim review/SKILL.md
+# 修改技能或模板
+$EDITOR review/SKILL.md.tmpl
 
-# 3. Test it in Claude Code — changes are live
-#    > /review
+# 重新生成文档
+bun run gen:skill-docs
+bun run gen:skill-docs --host codex
 
-# 4. Editing browse source? Rebuild the binary
+# 需要时重新编译 browse
 bun run build
 
-# 5. Done for the day? Tear down
+# 收工时退出开发模式
 bin/dev-teardown
 ```
 
-## Testing & evals
+## 测试与评测
 
-### Setup
+### 环境准备
 
 ```bash
-# 1. Copy .env.example and add your API key
 cp .env.example .env
-# Edit .env → set ANTHROPIC_API_KEY=sk-ant-...
-
-# 2. Install deps (if you haven't already)
+# 在 .env 中填写 ANTHROPIC_API_KEY
 bun install
 ```
 
-Bun auto-loads `.env` — no extra config. Conductor workspaces inherit `.env` from the main worktree automatically (see "Conductor workspaces" below).
+Bun 会自动加载 `.env`。如果你使用 Conductor，多数情况下工作区也会继承主工作树里的 `.env`。
 
-### Test tiers
+### 测试层级
 
-| Tier | Command | Cost | What it tests |
-|------|---------|------|---------------|
-| 1 — Static | `bun test` | Free | Command validation, snapshot flags, SKILL.md correctness, TODOS-format.md refs, observability unit tests |
-| 2 — E2E | `bun run test:e2e` | ~$3.85 | Full skill execution via `claude -p` subprocess |
-| 3 — LLM eval | `bun run test:evals` | ~$0.15 standalone | LLM-as-judge scoring of generated SKILL.md docs |
-| 2+3 | `bun run test:evals` | ~$4 combined | E2E + LLM-as-judge (runs both) |
+| 层级 | 命令 | 成本 | 验证内容 |
+|------|------|------|----------|
+| Tier 1 | `bun test` | 免费 | 静态校验、命令一致性、模板生成质量、技能引用合法性 |
+| Tier 2 | `bun run test:e2e` | 付费 | 基于 `claude -p` 的端到端技能执行 |
+| Tier 3 | `bun run test:evals` | 付费 | LLM-as-judge 对生成文档的质量评分 |
+
+常用命令：
 
 ```bash
-bun test                     # Tier 1 only (runs on every commit, <5s)
-bun run test:e2e             # Tier 2: E2E only (needs EVALS=1, can't run inside Claude Code)
-bun run test:evals           # Tier 2 + 3 combined (~$4/run)
+bun test
+bun run test:e2e
+bun run test:evals
 ```
 
-### Tier 1: Static validation (free)
+### Tier 1：静态校验
 
-Runs automatically with `bun test`. No API keys needed.
+`bun test` 会运行：
 
-- **Skill parser tests** (`test/skill-parser.test.ts`) — Extracts every `$B` command from SKILL.md bash code blocks and validates against the command registry in `browse/src/commands.ts`. Catches typos, removed commands, and invalid snapshot flags.
-- **Skill validation tests** (`test/skill-validation.test.ts`) — Validates that SKILL.md files reference only real commands and flags, and that command descriptions meet quality thresholds.
-- **Generator tests** (`test/gen-skill-docs.test.ts`) — Tests the template system: verifies placeholders resolve correctly, output includes value hints for flags (e.g. `-d <N>` not just `-d`), enriched descriptions for key commands (e.g. `is` lists valid states, `press` lists key examples).
+- 命令解析测试：检查技能里的 `$B` 命令是否都真实存在
+- 技能校验测试：检查命令、flags、描述是否有效
+- 生成器测试：检查模板占位符和生成结果是否符合预期
 
-### Tier 2: E2E via `claude -p` (~$3.85/run)
+### Tier 2：E2E
 
-Spawns `claude -p` as a subprocess with `--output-format stream-json --verbose`, streams NDJSON for real-time progress, and scans for browse errors. This is the closest thing to "does this skill actually work end-to-end?"
+E2E 会拉起 `claude -p` 子进程，以真实会话形式执行技能，是最接近“这个技能是否真的能端到端工作”的测试。
 
 ```bash
-# Must run from a plain terminal — can't nest inside Claude Code or Conductor
 EVALS=1 bun test test/skill-e2e.test.ts
 ```
 
-- Gated by `EVALS=1` env var (prevents accidental expensive runs)
-- Auto-skips if running inside Claude Code (`claude -p` can't nest)
-- API connectivity pre-check — fails fast on ConnectionRefused before burning budget
-- Real-time progress to stderr: `[Ns] turn T tool #C: Name(...)`
-- Saves full NDJSON transcripts and failure JSON for debugging
-- Tests live in `test/skill-e2e.test.ts`, runner logic in `test/helpers/session-runner.ts`
+特点：
 
-### E2E observability
+- 需要 `EVALS=1`，防止误触发高成本测试
+- 如果运行环境嵌套在 Claude Code 内，会自动跳过
+- 会把完整的 NDJSON 输出和失败诊断持久化到 `~/.gstack-dev/`
 
-When E2E tests run, they produce machine-readable artifacts in `~/.gstack-dev/`:
+### Tier 3：LLM-as-judge
 
-| Artifact | Path | Purpose |
-|----------|------|---------|
-| Heartbeat | `e2e-live.json` | Current test status (updated per tool call) |
-| Partial results | `evals/_partial-e2e.json` | Completed tests (survives kills) |
-| Progress log | `e2e-runs/{runId}/progress.log` | Append-only text log |
-| NDJSON transcripts | `e2e-runs/{runId}/{test}.ndjson` | Raw `claude -p` output per test |
-| Failure JSON | `e2e-runs/{runId}/{test}-failure.json` | Diagnostic data on failure |
+这一层使用 Claude 对生成的 `SKILL.md` 进行评分，主要考察：
 
-**Live dashboard:** Run `bun run eval:watch` in a second terminal to see a live dashboard showing completed tests, the currently running test, and cost. Use `--tail` to also show the last 10 lines of progress.log.
+- 清晰度
+- 完整性
+- 可执行性
 
-**Eval history tools:**
+每项分数必须达到阈值，且生成结果不能比 `origin/main` 的基线更差。
+
+## 评测产物
+
+E2E 和评测会把机器可读结果写到 `~/.gstack-dev/`，包括：
+
+- 当前执行状态
+- 部分结果
+- 进度日志
+- 每个测试的 NDJSON transcript
+- 失败时的诊断 JSON
+
+你可以使用：
 
 ```bash
-bun run eval:list            # list all eval runs (turns, duration, cost per run)
-bun run eval:compare         # compare two runs — shows per-test deltas + Takeaway commentary
-bun run eval:summary         # aggregate stats + per-test efficiency averages across runs
+bun run eval:list
+bun run eval:compare
+bun run eval:summary
 ```
 
-**Eval comparison commentary:** `eval:compare` generates natural-language Takeaway sections interpreting what changed between runs — flagging regressions, noting improvements, calling out efficiency gains (fewer turns, faster, cheaper), and producing an overall summary. This is driven by `generateCommentary()` in `eval-store.ts`.
+来查看历史、对比两次运行、统计整体趋势。
 
-Artifacts are never cleaned up — they accumulate in `~/.gstack-dev/` for post-mortem debugging and trend analysis.
+## CI
 
-### Tier 3: LLM-as-judge (~$0.15/run)
+GitHub Actions 会在每次 push 和 PR 时执行 `bun run gen:skill-docs --dry-run`。如果仓库里的生成文件已经过期，CI 会失败，提醒你先重新生成并提交最新文档。
 
-Uses Claude Sonnet to score generated SKILL.md docs on three dimensions:
+## 编辑 SKILL.md 的正确方式
 
-- **Clarity** — Can an AI agent understand the instructions without ambiguity?
-- **Completeness** — Are all commands, flags, and usage patterns documented?
-- **Actionability** — Can the agent execute tasks using only the information in the doc?
+`SKILL.md` 是由 `.tmpl` 模板生成的。不要直接编辑 `.md`，否则下一次生成时会被覆盖。
 
-Each dimension is scored 1-5. Threshold: every dimension must score **≥ 4**. There's also a regression test that compares generated docs against the hand-maintained baseline from `origin/main` — generated must score equal or higher.
+正确流程：
 
 ```bash
-# Needs ANTHROPIC_API_KEY in .env — included in bun run test:evals
-```
-
-- Uses `claude-sonnet-4-6` for scoring stability
-- Tests live in `test/skill-llm-eval.test.ts`
-- Calls the Anthropic API directly (not `claude -p`), so it works from anywhere including inside Claude Code
-
-### CI
-
-A GitHub Action (`.github/workflows/skill-docs.yml`) runs `bun run gen:skill-docs --dry-run` on every push and PR. If the generated SKILL.md files differ from what's committed, CI fails. This catches stale docs before they merge.
-
-Tests run against the browse binary directly — they don't require dev mode.
-
-## Editing SKILL.md files
-
-SKILL.md files are **generated** from `.tmpl` templates. Don't edit the `.md` directly — your changes will be overwritten on the next build.
-
-```bash
-# 1. Edit the template
-vim SKILL.md.tmpl              # or browse/SKILL.md.tmpl
-
-# 2. Regenerate for both hosts
+$EDITOR SKILL.md.tmpl
 bun run gen:skill-docs
 bun run gen:skill-docs --host codex
-
-# 3. Check health (reports both Claude and Codex)
-bun run skill:check
-
-# Or use watch mode — auto-regenerates on save
-bun run dev:skill
 ```
 
-For template authoring best practices (natural language over bash-isms, dynamic branch detection, `{{BASE_BRANCH_DETECT}}` usage), see CLAUDE.md's "Writing SKILL templates" section.
-
-To add a browse command, add it to `browse/src/commands.ts`. To add a snapshot flag, add it to `SNAPSHOT_FLAGS` in `browse/src/snapshot.ts`. Then rebuild.
-
-## Dual-host development (Claude + Codex)
-
-gstack generates SKILL.md files for two hosts: **Claude** (`.claude/skills/`) and **Codex** (`.agents/skills/`). Every template change needs to be generated for both.
-
-### Generating for both hosts
+如果你修改的是 browse 相关命令或快照能力，还应运行：
 
 ```bash
-# Generate Claude output (default)
-bun run gen:skill-docs
-
-# Generate Codex output
-bun run gen:skill-docs --host codex
-# --host agents is an alias for --host codex
-
-# Or use build, which does both + compiles binaries
 bun run build
 ```
 
-### What changes between hosts
+## 提交建议
 
-| Aspect | Claude | Codex |
-|--------|--------|-------|
-| Output directory | `{skill}/SKILL.md` | `.agents/skills/gstack-{skill}/SKILL.md` |
-| Frontmatter | Full (name, description, allowed-tools, hooks, version) | Minimal (name + description only) |
-| Paths | `~/.claude/skills/gstack` | `~/.codex/skills/gstack` |
-| Hook skills | `hooks:` frontmatter (enforced by Claude) | Inline safety advisory prose (advisory only) |
-| `/codex` skill | Included (Claude wraps codex exec) | Excluded (self-referential) |
+- 模板修改和生成文件更新最好一起提交
+- 行为修改与纯机械改动尽量拆开
+- 测试基础设施变更与具体测试用例变更尽量拆开
+- 如果修改了技能的核心工作流，请至少跑一轮静态测试和必要的 E2E
 
-### Testing Codex output
+## 贡献标准
 
-```bash
-# Run all static tests (includes Codex validation)
-bun test
+一个高质量 PR 应满足：
 
-# Check freshness for both hosts
-bun run gen:skill-docs --dry-run
-bun run gen:skill-docs --host codex --dry-run
+- 改动范围清晰
+- 模板与生成文件一致
+- 测试通过
+- 说明用户可感知的收益
+- 不引入宿主或框架特定的硬编码假设
 
-# Health dashboard covers both hosts
-bun run skill:check
-```
-
-### Dev setup for .agents/
-
-When you run `bin/dev-setup`, it creates symlinks in both `.claude/skills/` and `.agents/skills/` (if applicable), so Codex-compatible agents can discover your dev skills too.
-
-### Adding a new skill
-
-When you add a new skill template, both hosts get it automatically:
-1. Create `{skill}/SKILL.md.tmpl`
-2. Run `bun run gen:skill-docs` (Claude output) and `bun run gen:skill-docs --host codex` (Codex output)
-3. The dynamic template discovery picks it up — no static list to update
-4. Commit both `{skill}/SKILL.md` and `.agents/skills/gstack-{skill}/SKILL.md`
-
-## Conductor workspaces
-
-If you're using [Conductor](https://conductor.build) to run multiple Claude Code sessions in parallel, `conductor.json` wires up workspace lifecycle automatically:
-
-| Hook | Script | What it does |
-|------|--------|-------------|
-| `setup` | `bin/dev-setup` | Copies `.env` from main worktree, installs deps, symlinks skills |
-| `archive` | `bin/dev-teardown` | Removes skill symlinks, cleans up `.claude/` directory |
-
-When Conductor creates a new workspace, `bin/dev-setup` runs automatically. It detects the main worktree (via `git worktree list`), copies your `.env` so API keys carry over, and sets up dev mode — no manual steps needed.
-
-**First-time setup:** Put your `ANTHROPIC_API_KEY` in `.env` in the main repo (see `.env.example`). Every Conductor workspace inherits it automatically.
-
-## Things to know
-
-- **SKILL.md files are generated.** Edit the `.tmpl` template, not the `.md`. Run `bun run gen:skill-docs` to regenerate.
-- **TODOS.md is the unified backlog.** Organized by skill/component with P0-P4 priorities. `/ship` auto-detects completed items. All planning/review/retro skills read it for context.
-- **Browse source changes need a rebuild.** If you touch `browse/src/*.ts`, run `bun run build`.
-- **Dev mode shadows your global install.** Project-local skills take priority over `~/.claude/skills/gstack`. `bin/dev-teardown` restores the global one.
-- **Conductor workspaces are independent.** Each workspace is its own git worktree. `bin/dev-setup` runs automatically via `conductor.json`.
-- **`.env` propagates across worktrees.** Set it once in the main repo, all Conductor workspaces get it.
-- **`.claude/skills/` is gitignored.** The symlinks never get committed.
-
-## Testing your changes in a real project
-
-**This is the recommended way to develop gstack.** Symlink your gstack checkout
-into the project where you actually use it, so your changes are live while you
-do real work:
-
-```bash
-# In your core project
-ln -sfn /path/to/your/gstack-checkout .claude/skills/gstack
-cd .claude/skills/gstack && bun install && bun run build
-```
-
-Now every gstack skill invocation in this project uses your working tree. Edit a
-template, run `bun run gen:skill-docs`, and the next `/review` or `/qa` call picks
-it up immediately.
-
-**To go back to the stable global install**, just remove the symlink:
-
-```bash
-rm .claude/skills/gstack
-```
-
-Claude Code falls back to `~/.claude/skills/gstack/` automatically.
-
-### Alternative: point your global install at a branch
-
-If you don't want per-project symlinks, you can switch the global install:
-
-```bash
-cd ~/.claude/skills/gstack
-git fetch origin
-git checkout origin/<branch>
-bun install && bun run build
-```
-
-This affects all projects. To revert: `git checkout main && git pull && bun run build`.
-
-## Shipping your changes
-
-When you're happy with your skill edits:
-
-```bash
-/ship
-```
-
-This runs tests, reviews the diff, triages Greptile comments (with 2-tier escalation), manages TODOS.md, bumps the version, and opens a PR. See `ship/SKILL.md` for the full workflow.
+如果你不确定某个改动是否合适，最好的办法通常不是先问，而是先在真实项目里用它一轮，再决定要不要提 PR。

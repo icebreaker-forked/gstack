@@ -1,220 +1,212 @@
-# Browser — technical details
+# Browser：技术说明
 
-This document covers the command reference and internals of gstack's headless browser.
+本文介绍 gstack 无头浏览器的命令参考与内部实现。
 
-## Command reference
+## 命令概览
 
-| Category | Commands | What for |
-|----------|----------|----------|
-| Navigate | `goto`, `back`, `forward`, `reload`, `url` | Get to a page |
-| Read | `text`, `html`, `links`, `forms`, `accessibility` | Extract content |
-| Snapshot | `snapshot [-i] [-c] [-d N] [-s sel] [-D] [-a] [-o] [-C]` | Get refs, diff, annotate |
-| Interact | `click`, `fill`, `select`, `hover`, `type`, `press`, `scroll`, `wait`, `viewport`, `upload` | Use the page |
-| Inspect | `js`, `eval`, `css`, `attrs`, `is`, `console`, `network`, `dialog`, `cookies`, `storage`, `perf` | Debug and verify |
-| Visual | `screenshot [--viewport] [--clip x,y,w,h] [sel\|@ref] [path]`, `pdf`, `responsive` | See what Claude sees |
-| Compare | `diff <url1> <url2>` | Spot differences between environments |
-| Dialogs | `dialog-accept [text]`, `dialog-dismiss` | Control alert/confirm/prompt handling |
-| Tabs | `tabs`, `tab`, `newtab`, `closetab` | Multi-page workflows |
-| Cookies | `cookie-import`, `cookie-import-browser` | Import cookies from file or real browser |
-| Multi-step | `chain` (JSON from stdin) | Batch commands in one call |
-| Handoff | `handoff [reason]`, `resume` | Switch to visible Chrome for user takeover |
+| 分类 | 命令 | 用途 |
+|------|------|------|
+| 导航 | `goto`、`back`、`forward`、`reload`、`url` | 进入或切换页面 |
+| 读取 | `text`、`html`、`links`、`forms`、`accessibility` | 提取页面内容 |
+| 快照 | `snapshot [-i] [-c] [-d N] [-s sel] [-D] [-a] [-o] [-C]` | 获取引用、对比变化、生成标注 |
+| 交互 | `click`、`fill`、`select`、`hover`、`type`、`press`、`scroll`、`wait`、`viewport`、`upload` | 操作页面 |
+| 检查 | `js`、`eval`、`css`、`attrs`、`is`、`console`、`network`、`dialog`、`cookies`、`storage`、`perf` | 调试与验证 |
+| 视觉 | `screenshot`、`pdf`、`responsive` | 查看页面视觉结果 |
+| 对比 | `diff <url1> <url2>` | 比较两个环境差异 |
+| 弹窗 | `dialog-accept [text]`、`dialog-dismiss` | 控制 alert/confirm/prompt |
+| 标签页 | `tabs`、`tab`、`newtab`、`closetab` | 多页面工作流 |
+| Cookie | `cookie-import`、`cookie-import-browser` | 从文件或真实浏览器导入 cookie |
+| 批量执行 | `chain`（从 stdin 读取 JSON） | 一次调用执行多个步骤 |
+| 交接 | `handoff [reason]`、`resume` | 切换到可见 Chrome 让用户接手 |
 
-All selector arguments accept CSS selectors, `@e` refs after `snapshot`, or `@c` refs after `snapshot -C`. 50+ commands total plus cookie import.
+所有选择器参数都支持 CSS 选择器、`snapshot` 之后的 `@e` 引用，以及 `snapshot -C` 生成的 `@c` 引用。全部命令总数超过 50 个。
 
-## How it works
+## 工作原理
 
-gstack's browser is a compiled CLI binary that talks to a persistent local Chromium daemon over HTTP. The CLI is a thin client — it reads a state file, sends a command, and prints the response to stdout. The server does the real work via [Playwright](https://playwright.dev/).
+gstack 的浏览器是一个编译后的 CLI 二进制。CLI 自身很薄，只负责读取状态文件、向本地持久化 Chromium 守护进程发送 HTTP 请求，再把结果输出到 stdout。真正执行浏览器操作的是基于 [Playwright](https://playwright.dev/) 的本地服务端。
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Claude Code                                                    │
-│                                                                 │
-│  "browse goto https://staging.myapp.com"                        │
-│       │                                                         │
-│       ▼                                                         │
-│  ┌──────────┐    HTTP POST     ┌──────────────┐                 │
-│  │ browse   │ ──────────────── │ Bun HTTP     │                 │
-│  │ CLI      │  localhost:rand  │ server       │                 │
-│  │          │  Bearer token    │              │                 │
-│  │ compiled │ ◄──────────────  │  Playwright  │──── Chromium    │
-│  │ binary   │  plain text      │  API calls   │    (headless)   │
-│  └──────────┘                  └──────────────┘                 │
-│   ~1ms startup                  persistent daemon               │
-│                                 auto-starts on first call       │
-│                                 auto-stops after 30 min idle    │
-└─────────────────────────────────────────────────────────────────┘
+```text
+Claude Code
+   │
+   ▼
+browse CLI（二进制）
+   │  HTTP + Bearer Token
+   ▼
+Bun HTTP server
+   │
+   ▼
+Playwright API
+   │
+   ▼
+Chromium（无头）
 ```
 
-### Lifecycle
+### 生命周期
 
-1. **First call**: CLI checks `.gstack/browse.json` (in the project root) for a running server. None found — it spawns `bun run browse/src/server.ts` in the background. The server launches headless Chromium via Playwright, picks a random port (10000-60000), generates a bearer token, writes the state file, and starts accepting HTTP requests. This takes ~3 seconds.
+1. **第一次调用**：CLI 检查项目根目录下的 `.gstack/browse.json`。如果没有运行中的服务，就在后台启动 `browse/src/server.ts`。服务会拉起无头 Chromium、随机端口、生成 bearer token，并写入状态文件。首次启动通常约 3 秒。
+2. **后续调用**：CLI 读取状态文件，发出带 token 的 HTTP POST，请求服务端执行命令。往返一般约 100 到 200ms。
+3. **空闲关闭**：30 分钟无命令后，服务自动退出并清理状态文件。
+4. **崩溃恢复**：如果 Chromium 崩溃，服务立即退出。下次调用时 CLI 会自动重新启动新实例。
 
-2. **Subsequent calls**: CLI reads the state file, sends an HTTP POST with the bearer token, prints the response. ~100-200ms round trip.
+## 主要组件
 
-3. **Idle shutdown**: After 30 minutes with no commands, the server shuts down and cleans up the state file. Next call restarts it automatically.
-
-4. **Crash recovery**: If Chromium crashes, the server exits immediately (no self-healing — don't hide failure). The CLI detects the dead server on the next call and starts a fresh one.
-
-### Key components
-
-```
+```text
 browse/
 ├── src/
-│   ├── cli.ts              # Thin client — reads state file, sends HTTP, prints response
-│   ├── server.ts           # Bun.serve HTTP server — routes commands to Playwright
-│   ├── browser-manager.ts  # Chromium lifecycle — launch, tabs, ref map, crash handling
-│   ├── snapshot.ts         # Accessibility tree → @ref assignment → Locator map + diff/annotate/-C
-│   ├── read-commands.ts    # Non-mutating commands (text, html, links, js, css, is, dialog, etc.)
-│   ├── write-commands.ts   # Mutating commands (click, fill, select, upload, dialog-accept, etc.)
-│   ├── meta-commands.ts    # Server management, chain, diff, snapshot routing
-│   ├── cookie-import-browser.ts  # Decrypt + import cookies from real Chromium browsers
-│   ├── cookie-picker-routes.ts   # HTTP routes for interactive cookie picker UI
-│   ├── cookie-picker-ui.ts       # Self-contained HTML/CSS/JS for cookie picker
-│   └── buffers.ts          # CircularBuffer<T> + console/network/dialog capture
-├── test/                   # Integration tests + HTML fixtures
+│   ├── cli.ts                     # 读取状态文件、发 HTTP、打印结果
+│   ├── server.ts                  # Bun HTTP 服务端
+│   ├── browser-manager.ts         # Chromium 生命周期、标签页、引用映射、崩溃处理
+│   ├── snapshot.ts                # 可访问性树转 @ref、差异对比、标注
+│   ├── read-commands.ts           # text/html/js/css/is/dialog 等只读命令
+│   ├── write-commands.ts          # click/fill/select/upload 等写命令
+│   ├── meta-commands.ts           # chain/diff/snapshot 路由与服务管理
+│   ├── cookie-import-browser.ts   # 从真实 Chromium 浏览器解密并导入 cookie
+│   ├── cookie-picker-routes.ts    # cookie 选择器 UI 的 HTTP 路由
+│   ├── cookie-picker-ui.ts        # 自包含的 cookie 选择器界面
+│   └── buffers.ts                 # console/network/dialog 的环形缓冲区
+├── test/                          # 集成测试与 HTML 夹具
 └── dist/
-    └── browse              # Compiled binary (~58MB, Bun --compile)
+    └── browse                     # 编译后的二进制
 ```
 
-### The snapshot system
+## 快照系统
 
-The browser's key innovation is ref-based element selection, built on Playwright's accessibility tree API:
+浏览器交互的核心能力是基于 `@ref` 的元素引用机制，它建立在 Playwright 的可访问性树 API 之上：
 
-1. `page.locator(scope).ariaSnapshot()` returns a YAML-like accessibility tree
-2. The snapshot parser assigns refs (`@e1`, `@e2`, ...) to each element
-3. For each ref, it builds a Playwright `Locator` (using `getByRole` + nth-child)
-4. The ref-to-Locator map is stored on `BrowserManager`
-5. Later commands like `click @e3` look up the Locator and call `locator.click()`
+1. `page.locator(scope).ariaSnapshot()` 生成类似 YAML 的可访问性树
+2. 解析器为每个元素分配引用，例如 `@e1`、`@e2`
+3. 系统为每个引用构造对应的 Playwright `Locator`
+4. 这个映射保存在 `BrowserManager`
+5. 后续执行 `click @e3` 时，就能直接取回对应 `Locator` 并操作
 
-No DOM mutation. No injected scripts. Just Playwright's native accessibility API.
+优势是：
 
-**Ref staleness detection:** SPAs can mutate the DOM without navigation (React router, tab switches, modals). When this happens, refs collected from a previous `snapshot` may point to elements that no longer exist. To handle this, `resolveRef()` runs an async `count()` check before using any ref — if the element count is 0, it throws immediately with a message telling the agent to re-run `snapshot`. This fails fast (~5ms) instead of waiting for Playwright's 30-second action timeout.
+- 不需要修改 DOM
+- 不需要注入脚本
+- 直接复用 Playwright 原生能力
 
-**Extended snapshot features:**
-- `--diff` (`-D`): Stores each snapshot as a baseline. On the next `-D` call, returns a unified diff showing what changed. Use this to verify that an action (click, fill, etc.) actually worked.
-- `--annotate` (`-a`): Injects temporary overlay divs at each ref's bounding box, takes a screenshot with ref labels visible, then removes the overlays. Use `-o <path>` to control the output path.
-- `--cursor-interactive` (`-C`): Scans for non-ARIA interactive elements (divs with `cursor:pointer`, `onclick`, `tabindex>=0`) using `page.evaluate`. Assigns `@c1`, `@c2`... refs with deterministic `nth-child` CSS selectors. These are elements the ARIA tree misses but users can still click.
+### 失效引用检测
 
-### Screenshot modes
+SPA 页面在不跳转的情况下也会改变 DOM，比如切 tab、弹窗、路由切换。旧快照里的引用可能已经失效。为避免 Playwright 默认 30 秒超时，`resolveRef()` 会在真正执行前先做一次快速 `count()` 检查；如果结果为 0，就立即报错并提示重新执行 `snapshot`。
 
-The `screenshot` command supports four modes:
+### 扩展能力
 
-| Mode | Syntax | Playwright API |
-|------|--------|----------------|
-| Full page (default) | `screenshot [path]` | `page.screenshot({ fullPage: true })` |
-| Viewport only | `screenshot --viewport [path]` | `page.screenshot({ fullPage: false })` |
-| Element crop | `screenshot "#sel" [path]` or `screenshot @e3 [path]` | `locator.screenshot()` |
-| Region clip | `screenshot --clip x,y,w,h [path]` | `page.screenshot({ clip })` |
+- `--diff` / `-D`：把快照存成基线。下一次带 `-D` 的调用会返回 unified diff，便于验证点击、输入等操作是否真的生效。
+- `--annotate` / `-a`：在元素边界框上临时叠加标签层，截图后再移除，用于可视化引用位置。配合 `-o <path>` 指定输出路径。
+- `--cursor-interactive` / `-C`：通过 `page.evaluate` 额外扫描 ARIA 树之外、但用户仍能点击的元素，比如 `cursor:pointer` 的 `div`、带 `onclick` 的节点或 `tabindex>=0` 的元素，并为其分配 `@c1`、`@c2` 引用。
 
-Element crop accepts CSS selectors (`.class`, `#id`, `[attr]`) or `@e`/`@c` refs from `snapshot`. Auto-detection: `@e`/`@c` prefix = ref, `.`/`#`/`[` prefix = CSS selector, `--` prefix = flag, everything else = output path.
+## 截图模式
 
-Mutual exclusion: `--clip` + selector and `--viewport` + `--clip` both throw errors. Unknown flags (e.g. `--bogus`) also throw.
+| 模式 | 语法 | 对应 Playwright API |
+|------|------|---------------------|
+| 整页截图（默认） | `screenshot [path]` | `page.screenshot({ fullPage: true })` |
+| 仅视口 | `screenshot --viewport [path]` | `page.screenshot({ fullPage: false })` |
+| 元素裁剪 | `screenshot "#sel" [path]` 或 `screenshot @e3 [path]` | `locator.screenshot()` |
+| 区域裁剪 | `screenshot --clip x,y,w,h [path]` | `page.screenshot({ clip })` |
 
-### Authentication
+元素裁剪支持 CSS 选择器和 `@e` / `@c` 引用。命令会自动判断参数类型：`@e`/`@c` 视为引用，`.`/`#`/`[` 开头视为 CSS 选择器，`--` 开头视为 flag，其余视为输出路径。
 
-Each server session generates a random UUID as a bearer token. The token is written to the state file (`.gstack/browse.json`) with chmod 600. Every HTTP request must include `Authorization: Bearer <token>`. This prevents other processes on the machine from controlling the browser.
+## 认证与安全
 
-### Console, network, and dialog capture
+每个服务会话都会生成随机 UUID 作为 bearer token，并以 `chmod 600` 权限写入状态文件 `.gstack/browse.json`。所有 HTTP 请求都必须带 `Authorization: Bearer <token>`，从而避免同机其他进程直接控制浏览器。
 
-The server hooks into Playwright's `page.on('console')`, `page.on('response')`, and `page.on('dialog')` events. All entries are kept in O(1) circular buffers (50,000 capacity each) and flushed to disk asynchronously via `Bun.write()`:
+## 控制台、网络与弹窗捕获
 
-- Console: `.gstack/browse-console.log`
-- Network: `.gstack/browse-network.log`
-- Dialog: `.gstack/browse-dialog.log`
+服务端会监听 Playwright 的 `console`、`response` 和 `dialog` 事件，并把结果写入 O(1) 环形缓冲区，同时异步刷盘到：
 
-The `console`, `network`, and `dialog` commands read from the in-memory buffers, not disk.
+- `.gstack/browse-console.log`
+- `.gstack/browse-network.log`
+- `.gstack/browse-dialog.log`
 
-### User handoff
+`console`、`network`、`dialog` 命令默认读取内存缓冲，而不是磁盘文件。
 
-When the headless browser can't proceed (CAPTCHA, MFA, complex auth), `handoff` opens a visible Chrome window at the exact same page with all cookies, localStorage, and tabs preserved. The user solves the problem manually, then `resume` returns control to the agent with a fresh snapshot.
+## 用户接管
+
+当无头浏览器无法继续，例如遇到验证码、MFA 或复杂登录流程时，可以执行：
 
 ```bash
-$B handoff "Stuck on CAPTCHA at login page"   # opens visible Chrome
-# User solves CAPTCHA...
-$B resume                                       # returns to headless with fresh snapshot
+$B handoff "卡在登录页验证码"
+# 用户在可见 Chrome 中手工完成操作
+$B resume
 ```
 
-The browser auto-suggests `handoff` after 3 consecutive failures. State is fully preserved across the switch — no re-login needed.
+`handoff` 会打开一个可见的 Chrome 窗口，并保留当前页面、cookie、localStorage 和标签页。用户手动完成后，`resume` 会把控制权交回代理，并附带新的快照。
 
-### Dialog handling
+系统在连续 3 次失败后会主动建议使用 `handoff`。
 
-Dialogs (alert, confirm, prompt) are auto-accepted by default to prevent browser lockup. The `dialog-accept` and `dialog-dismiss` commands control this behavior. For prompts, `dialog-accept <text>` provides the response text. All dialogs are logged to the dialog buffer with type, message, and action taken.
+## 弹窗处理
 
-### JavaScript execution (`js` and `eval`)
+为防止浏览器被 alert/confirm/prompt 卡死，系统默认自动接受弹窗。`dialog-accept` 和 `dialog-dismiss` 可覆盖这一行为；对 prompt 来说，`dialog-accept <text>` 会把文本作为输入值。所有弹窗都会记录类型、文本和最终动作。
 
-`js` runs a single expression, `eval` runs a JS file. Both support `await` — expressions containing `await` are automatically wrapped in an async context:
+## JavaScript 执行
+
+- `js`：执行单条表达式
+- `eval`：执行一个 JS 文件
+
+两者都支持 `await`。如果表达式里包含 `await`，系统会自动包装成异步上下文：
 
 ```bash
-$B js "await fetch('/api/data').then(r => r.json())"  # works
-$B js "document.title"                                  # also works (no wrapping needed)
-$B eval my-script.js                                    # file with await works too
+$B js "await fetch('/api/data').then(r => r.json())"
+$B js "document.title"
+$B eval my-script.js
 ```
 
-For `eval` files, single-line files return the expression value directly. Multi-line files need explicit `return` when using `await`. Comments containing "await" don't trigger wrapping.
+## 多工作区隔离
 
-### Multi-workspace support
+每个工作区拥有独立浏览器实例、独立 Chromium 进程、独立标签页、cookie 和日志。状态文件存放在当前项目根目录下的 `.gstack/` 中，因此不同项目互不干扰，也不会端口冲突。
 
-Each workspace gets its own isolated browser instance with its own Chromium process, tabs, cookies, and logs. State is stored in `.gstack/` inside the project root (detected via `git rev-parse --show-toplevel`).
+## 环境变量
 
-| Workspace | State file | Port |
-|-----------|------------|------|
-| `/code/project-a` | `/code/project-a/.gstack/browse.json` | random (10000-60000) |
-| `/code/project-b` | `/code/project-b/.gstack/browse.json` | random (10000-60000) |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `BROWSE_PORT` | 0（随机 10000-60000） | 指定 HTTP 服务固定端口 |
+| `BROWSE_IDLE_TIMEOUT` | 1800000 | 空闲自动关闭时间（毫秒） |
+| `BROWSE_STATE_FILE` | `.gstack/browse.json` | 状态文件路径 |
+| `BROWSE_SERVER_SCRIPT` | 自动检测 | `server.ts` 的路径 |
 
-No port collisions. No shared state. Each project is fully isolated.
+## 性能
 
-### Environment variables
+| 工具 | 首次调用 | 后续调用 | 每次调用的上下文开销 |
+|------|-----------|-----------|----------------------|
+| Chrome MCP | ~5s | ~2-5s | ~2000 tokens |
+| Playwright MCP | ~3s | ~1-3s | ~1500 tokens |
+| **gstack browse** | **~3s** | **~100-200ms** | **0 tokens** |
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BROWSE_PORT` | 0 (random 10000-60000) | Fixed port for the HTTP server (debug override) |
-| `BROWSE_IDLE_TIMEOUT` | 1800000 (30 min) | Idle shutdown timeout in ms |
-| `BROWSE_STATE_FILE` | `.gstack/browse.json` | Path to state file (CLI passes to server) |
-| `BROWSE_SERVER_SCRIPT` | auto-detected | Path to server.ts |
+在一个包含 20 条浏览器命令的会话里，MCP 方案会把大量 token 浪费在协议封装上，而 gstack 只走纯文本 stdout。
 
-### Performance
+## 为什么用 CLI，而不是 MCP
 
-| Tool | First call | Subsequent calls | Context overhead per call |
-|------|-----------|-----------------|--------------------------|
-| Chrome MCP | ~5s | ~2-5s | ~2000 tokens (schema + protocol) |
-| Playwright MCP | ~3s | ~1-3s | ~1500 tokens (schema + protocol) |
-| **gstack browse** | **~3s** | **~100-200ms** | **0 tokens** (plain text stdout) |
+对于本地浏览器自动化，MCP 额外引入了很多纯开销：
 
-The context overhead difference compounds fast. In a 20-command browser session, MCP tools burn 30,000-40,000 tokens on protocol framing alone. gstack burns zero.
+- 每次调用都要传 JSON schema 和协议包装，造成上下文膨胀
+- 长连接更脆弱，掉线后恢复成本高
+- Claude Code 本身已经有 Bash 能力，再叠一层协议没有必要
 
-### Why CLI over MCP?
+gstack 的做法更直接：编译后二进制，纯文本输入，纯文本输出，不需要额外连接管理。
 
-MCP (Model Context Protocol) works well for remote services, but for local browser automation it adds pure overhead:
+## 致谢
 
-- **Context bloat**: every MCP call includes full JSON schemas and protocol framing. A simple "get the page text" costs 10x more context tokens than it should.
-- **Connection fragility**: persistent WebSocket/stdio connections drop and fail to reconnect.
-- **Unnecessary abstraction**: Claude Code already has a Bash tool. A CLI that prints to stdout is the simplest possible interface.
+浏览器自动化层建立在 [Playwright](https://playwright.dev/) 之上。可访问性树 API、Locator 系统和 Chromium 管理能力，是 `@ref` 交互模型成立的基础。感谢 Playwright 团队提供这样稳定扎实的底层能力。
 
-gstack skips all of this. Compiled binary. Plain text in, plain text out. No protocol. No schema. No connection management.
+## 开发说明
 
-## Acknowledgments
-
-The browser automation layer is built on [Playwright](https://playwright.dev/) by Microsoft. Playwright's accessibility tree API, locator system, and headless Chromium management are what make ref-based interaction possible. The snapshot system — assigning `@ref` labels to accessibility tree nodes and mapping them back to Playwright Locators — is built entirely on top of Playwright's primitives. Thank you to the Playwright team for building such a solid foundation.
-
-## Development
-
-### Prerequisites
+### 前置条件
 
 - [Bun](https://bun.sh/) v1.0+
-- Playwright's Chromium (installed automatically by `bun install`)
+- Playwright Chromium（`bun install` 时会自动安装）
 
-### Quick start
+### 快速开始
 
 ```bash
-bun install              # install dependencies + Playwright Chromium
-bun test                 # run integration tests (~3s)
-bun run dev <cmd>        # run CLI from source (no compile)
-bun run build            # compile to browse/dist/browse
+bun install              # 安装依赖和 Playwright Chromium
+bun test                 # 运行集成测试
+bun run dev <cmd>        # 直接从源码运行 CLI
+bun run build            # 编译到 browse/dist/browse
 ```
 
-### Dev mode vs compiled binary
+### 开发模式与编译二进制
 
-During development, use `bun run dev` instead of the compiled binary. It runs `browse/src/cli.ts` directly with Bun, so you get instant feedback without a compile step:
+开发期间优先使用 `bun run dev`，它会直接执行 `browse/src/cli.ts`，无需每次编译：
 
 ```bash
 bun run dev goto https://example.com
@@ -223,49 +215,43 @@ bun run dev snapshot -i
 bun run dev click @e3
 ```
 
-The compiled binary (`bun run build`) is only needed for distribution. It produces a single ~58MB executable at `browse/dist/browse` using Bun's `--compile` flag.
+发布时再执行 `bun run build`，生成 `browse/dist/browse`。
 
-### Running tests
+### 运行测试
 
 ```bash
-bun test                         # run all tests
-bun test browse/test/commands              # run command integration tests only
-bun test browse/test/snapshot              # run snapshot tests only
-bun test browse/test/cookie-import-browser # run cookie import unit tests only
+bun test
+bun test browse/test/commands
+bun test browse/test/snapshot
+bun test browse/test/cookie-import-browser
 ```
 
-Tests spin up a local HTTP server (`browse/test/test-server.ts`) serving HTML fixtures from `browse/test/fixtures/`, then exercise the CLI commands against those pages. 203 tests across 3 files, ~15 seconds total.
+测试会拉起本地 HTTP 服务 `browse/test/test-server.ts`，从 `browse/test/fixtures/` 提供 HTML 页面，再用 CLI 对这些页面执行命令验证。
 
-### Source map
+### 源码索引
 
-| File | Role |
+| 文件 | 作用 |
 |------|------|
-| `browse/src/cli.ts` | Entry point. Reads `.gstack/browse.json`, sends HTTP to the server, prints response. |
-| `browse/src/server.ts` | Bun HTTP server. Routes commands to the right handler. Manages idle timeout. |
-| `browse/src/browser-manager.ts` | Chromium lifecycle — launch, tab management, ref map, crash detection. |
-| `browse/src/snapshot.ts` | Parses accessibility tree, assigns `@e`/`@c` refs, builds Locator map. Handles `--diff`, `--annotate`, `-C`. |
-| `browse/src/read-commands.ts` | Non-mutating commands: `text`, `html`, `links`, `js`, `css`, `is`, `dialog`, `forms`, etc. Exports `getCleanText()`. |
-| `browse/src/write-commands.ts` | Mutating commands: `goto`, `click`, `fill`, `upload`, `dialog-accept`, `useragent` (with context recreation), etc. |
-| `browse/src/meta-commands.ts` | Server management, chain routing, diff (DRY via `getCleanText`), snapshot delegation. |
-| `browse/src/cookie-import-browser.ts` | Decrypt Chromium cookies via macOS Keychain + PBKDF2/AES-128-CBC. Auto-detects installed browsers. |
-| `browse/src/cookie-picker-routes.ts` | HTTP routes for `/cookie-picker/*` — browser list, domain search, import, remove. |
-| `browse/src/cookie-picker-ui.ts` | Self-contained HTML generator for the interactive cookie picker (dark theme, no frameworks). |
-| `browse/src/buffers.ts` | `CircularBuffer<T>` (O(1) ring buffer) + console/network/dialog capture with async disk flush. |
+| `browse/src/cli.ts` | 入口。读取 `.gstack/browse.json`，向服务端发请求，并打印结果。 |
+| `browse/src/server.ts` | Bun HTTP 服务。分发命令并管理空闲超时。 |
+| `browse/src/browser-manager.ts` | Chromium 生命周期、标签页和引用映射。 |
+| `browse/src/snapshot.ts` | 解析可访问性树、分配 `@e`/`@c` 引用，并处理 diff/annotate。 |
+| `browse/src/read-commands.ts` | 只读命令：`text`、`html`、`links`、`js`、`css`、`is` 等。 |
+| `browse/src/write-commands.ts` | 写命令：`goto`、`click`、`fill`、`upload` 等。 |
+| `browse/src/meta-commands.ts` | chain、diff、snapshot 路由与服务管理。 |
+| `browse/src/cookie-import-browser.ts` | 从真实 Chromium 浏览器解密 cookie。 |
+| `browse/src/cookie-picker-routes.ts` | `/cookie-picker/*` HTTP 路由。 |
+| `browse/src/cookie-picker-ui.ts` | cookie 选择器界面。 |
+| `browse/src/buffers.ts` | 环形缓冲区与 console/network/dialog 捕获。 |
 
-### Deploying to the active skill
+## 部署到当前技能目录
 
-The active skill lives at `~/.claude/skills/gstack/`. After making changes:
+当前生效的技能通常位于 `~/.claude/skills/gstack/`。修改后：
 
-1. Push your branch
-2. Pull in the skill directory: `cd ~/.claude/skills/gstack && git pull`
-3. Rebuild: `cd ~/.claude/skills/gstack && bun run build`
+1. 推送你的分支
+2. 在技能目录执行 `git pull`
+3. 重新构建：
 
-Or copy the binary directly: `cp browse/dist/browse ~/.claude/skills/gstack/browse/dist/browse`
-
-### Adding a new command
-
-1. Add the handler in `read-commands.ts` (non-mutating) or `write-commands.ts` (mutating)
-2. Register the route in `server.ts`
-3. Add a test case in `browse/test/commands.test.ts` with an HTML fixture if needed
-4. Run `bun test` to verify
-5. Run `bun run build` to compile
+```bash
+cd ~/.claude/skills/gstack && bun run build
+```
