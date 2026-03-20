@@ -1,61 +1,53 @@
-# TODOS.md Format Reference
+# TODOS.md 格式参考
 
-Shared reference for the canonical TODOS.md format. Referenced by `/ship` (Step 5.5) and `/plan-ceo-review` (TODOS.md updates section) to ensure consistent TODO item structure.
+这是 `TODOS.md` 规范格式的共享参考。`/ship`（Step 5.5）和 `/plan-ceo-review`（TODOS 更新部分）都会引用它，以保证 TODO 项结构一致。
 
----
-
-## File Structure
+## 文件结构
 
 ```markdown
 # TODOS
 
-## <Skill/Component>     ← e.g., ## Browse, ## Ship, ## Review, ## Infrastructure
-<items sorted P0 first, then P1, P2, P3, P4>
+## <Skill/Component>     ← 例如：## Browse、## Ship、## Review、## Infrastructure
+<按优先级排序，P0 在最前>
 
 ## Completed
-<finished items with completion annotation>
+<已完成事项，附完成版本与日期>
 ```
 
-**Sections:** Organize by skill or component (`## Browse`, `## Ship`, `## Review`, `## QA`, `## Retro`, `## Infrastructure`). Within each section, sort items by priority (P0 at top).
+**分组原则：** 按技能或组件组织，例如 `## Browse`、`## Ship`、`## Review`、`## QA`、`## Retro`、`## Infrastructure`。每组内部按优先级排序，P0 在顶部。
 
----
+## TODO 项格式
 
-## TODO Item Format
-
-Each item is an H3 under its section:
+每个 TODO 项在所属分组下使用三级标题：
 
 ```markdown
-### <Title>
+### <标题>
 
-**What:** One-line description of the work.
+**What:** 一句话描述要做什么。
 
-**Why:** The concrete problem it solves or value it unlocks.
+**Why:** 解决什么问题，或释放什么价值。
 
-**Context:** Enough detail that someone picking this up in 3 months understands the motivation, the current state, and where to start.
+**Context:** 让三个月后接手的人也能理解动机、当前状态和起点。
 
 **Effort:** S / M / L / XL
 **Priority:** P0 / P1 / P2 / P3 / P4
-**Depends on:** <prerequisites, or "None">
+**Depends on:** <依赖项，或 "None">
 ```
 
-**Required fields:** What, Why, Context, Effort, Priority
-**Optional fields:** Depends on, Blocked by
+**必填字段：** `What`、`Why`、`Context`、`Effort`、`Priority`  
+**可选字段：** `Depends on`、`Blocked by`
 
----
+## 优先级定义
 
-## Priority Definitions
+- **P0**：阻塞项，下个版本前必须完成
+- **P1**：关键项，本周期应完成
+- **P2**：重要项，在 P0 / P1 清空后处理
+- **P3**：可选增强，等待更多使用反馈后再评估
+- **P4**：长期想法，不急
 
-- **P0** — Blocking: must be done before next release
-- **P1** — Critical: should be done this cycle
-- **P2** — Important: do when P0/P1 are clear
-- **P3** — Nice-to-have: revisit after adoption/usage data
-- **P4** — Someday: good idea, no urgency
+## 已完成项格式
 
----
-
-## Completed Item Format
-
-When an item is completed, move it to the `## Completed` section preserving its original content and appending:
+当某项完成后，将其移动到 `## Completed`，保留原有内容，并在末尾追加：
 
 ```markdown
 **Completed:** vX.Y.Z (YYYY-MM-DD)

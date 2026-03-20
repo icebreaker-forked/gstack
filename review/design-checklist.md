@@ -1,132 +1,109 @@
-# Design Review Checklist (Lite)
+# 设计评审清单（Lite）
 
-> **Subset of DESIGN_METHODOLOGY** — when adding items here, also update `generateDesignMethodology()` in `scripts/gen-skill-docs.ts`, and vice versa.
+> 这是 `DESIGN_METHODOLOGY` 的子集。若修改这里，也要同步更新 `scripts/gen-skill-docs.ts` 中的 `generateDesignMethodology()`。
 
-## Instructions
+## 说明
 
-This checklist applies to **source code in the diff** — not rendered output. Read each changed frontend file (full file, not just diff hunks) and flag anti-patterns.
+这份清单只针对 **diff 中涉及的前端源码**，不是页面实际渲染结果。请阅读每个变更过的前端文件全文，而不是只看 diff hunk，然后标记其中的反模式。
 
-**Trigger:** Only run this checklist if the diff touches frontend files. Use `gstack-diff-scope` to detect:
+**触发条件：** 只有当 diff 涉及前端文件时才运行。可用 `gstack-diff-scope` 检测：
 
 ```bash
 source <(~/.claude/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 ```
 
-If `SCOPE_FRONTEND=false`, skip the entire design review silently.
+如果 `SCOPE_FRONTEND=false`，则静默跳过设计评审。
 
-**DESIGN.md calibration:** If `DESIGN.md` or `design-system.md` exists in the repo root, read it first. All findings are calibrated against the project's stated design system. Patterns explicitly blessed in DESIGN.md are NOT flagged. If no DESIGN.md exists, use universal design principles.
+**DESIGN.md 校准：** 如果仓库根目录存在 `DESIGN.md` 或 `design-system.md`，先读它，再按该设计系统来判断。文档中明确允许的模式不要报。若没有设计系统文档，则按通用设计原则判断。
 
----
+## 置信度分层
 
-## Confidence Tiers
+- **[HIGH]**：可以通过 grep / 模式匹配可靠识别
+- **[MEDIUM]**：可以通过启发式规则识别，可能有少量噪声
+- **[LOW]**：需要理解视觉意图，只能作为“可能问题”提示
 
-Each item is tagged with a detection confidence level:
+## 分类
 
-- **[HIGH]** — Reliably detectable via grep/pattern match. Definitive findings.
-- **[MEDIUM]** — Detectable via pattern aggregation or heuristic. Flag as findings but expect some noise.
-- **[LOW]** — Requires understanding visual intent. Present as: "Possible issue — verify visually or run /design-review."
+**AUTO-FIX** 仅限高置信度、纯机械性 CSS 修复：
 
----
+- `outline: none` 且没有替代焦点样式
+- 新增 CSS 中使用 `!important`
+- 正文文字 `font-size` 小于 16px
 
-## Classification
+**ASK：**
 
-**AUTO-FIX** (mechanical CSS fixes only — HIGH confidence, no design judgment needed):
-- `outline: none` without replacement → add `outline: revert` or `&:focus-visible { outline: 2px solid currentColor; }`
-- `!important` in new CSS → remove and fix specificity
-- `font-size` < 16px on body text → bump to 16px
+- 其余所有需要设计判断的问题
 
-**ASK** (everything else — requires design judgment):
-- All AI slop findings, typography structure, spacing choices, interaction state gaps, DESIGN.md violations
+**LOW 置信度项：**
 
-**LOW confidence items** → present as "Possible: [description]. Verify visually or run /design-review." Never AUTO-FIX.
+- 一律写成 “Possible: ...，请视觉核验或运行 /design-review”
+- 不允许自动修
 
----
+## 输出格式
 
-## Output Format
-
-```
+```text
 Design Review: N issues (X auto-fixable, Y need input, Z possible)
 
 **AUTO-FIXED:**
-- [file:line] Problem → fix applied
+- [file:line] 问题 → 已应用修复
 
 **NEEDS INPUT:**
-- [file:line] Problem description
-  Recommended fix: suggested fix
+- [file:line] 问题描述
+  Recommended fix: 建议修复方式
 
 **POSSIBLE (verify visually):**
-- [file:line] Possible issue — verify with /design-review
+- [file:line] 可能问题 — 请用 /design-review 验证
 ```
 
-If no issues found: `Design Review: No issues found.`
+如果没有问题：`Design Review: No issues found.`
 
-If no frontend files changed: skip silently, no output.
+如果没有前端文件变更：静默跳过。
 
----
+## 类别
 
-## Categories
+### 1. AI Slop 检测
 
-### 1. AI Slop Detection (6 items) — highest priority
+这些是典型的“像 AI 拼出来的 UI，而不是成熟设计师会交付的界面”。
 
-These are the telltale signs of AI-generated UI that no designer at a respected studio would ship.
+- **[MEDIUM]** 紫色 / 靛色渐变背景或蓝紫配色
+- **[LOW]** 典型三栏功能网格：彩色圆形图标 + 粗体标题 + 两行描述，重复 3 次
+- **[LOW]** 把彩色圆形图标当节装饰
+- **[HIGH]** 全部居中：标题、描述、卡片内容大量 `text-align: center`
+- **[MEDIUM]** 所有元素统一套大圆角
+- **[MEDIUM]** 通用 hero 文案，例如 “Welcome to ...” / “Unlock the power of ...”
 
-- **[MEDIUM]** Purple/violet/indigo gradient backgrounds or blue-to-purple color schemes. Look for `linear-gradient` with values in the `#6366f1`–`#8b5cf6` range, or CSS custom properties resolving to purple/violet.
+### 2. 字体排印
 
-- **[LOW]** The 3-column feature grid: icon-in-colored-circle + bold title + 2-line description, repeated 3x symmetrically. Look for a grid/flex container with exactly 3 children that each contain a circular element + heading + paragraph.
+- **[HIGH]** 正文字体小于 16px
+- **[HIGH]** diff 中引入超过 3 种字体家族
+- **[HIGH]** 标题层级跳跃，例如同文件 `h1` 后直接跟 `h3`
+- **[HIGH]** 使用黑名单字体：Papyrus、Comic Sans、Lobster、Impact、Jokerman
 
-- **[LOW]** Icons in colored circles as section decoration. Look for elements with `border-radius: 50%` + a background color used as decorative containers for icons.
+### 3. 间距与布局
 
-- **[HIGH]** Centered everything: `text-align: center` on all headings, descriptions, and cards. Grep for `text-align: center` density — if >60% of text containers use center alignment, flag it.
+- **[MEDIUM]** 在 DESIGN.md 定义了间距体系时，出现不在 4px / 8px 标尺上的随意值
+- **[MEDIUM]** 容器使用固定宽度但没有响应式兜底
+- **[MEDIUM]** 文本容器缺失 `max-width`，导致行长过长
+- **[HIGH]** 新 CSS 里出现 `!important`
 
-- **[MEDIUM]** Uniform bubbly border-radius on every element: same large radius (16px+) applied to cards, buttons, inputs, containers uniformly. Aggregate `border-radius` values — if >80% use the same value ≥16px, flag it.
+### 4. 交互状态
 
-- **[MEDIUM]** Generic hero copy: "Welcome to [X]", "Unlock the power of...", "Your all-in-one solution for...", "Revolutionize your...", "Streamline your workflow". Grep HTML/JSX content for these patterns.
+- **[MEDIUM]** 按钮、链接、输入缺失 hover / focus 状态
+- **[HIGH]** `outline: none` 或 `outline: 0` 且无替代焦点提示
+- **[LOW]** 交互目标可能小于 44px
 
-### 2. Typography (4 items)
+### 5. DESIGN.md 违例
 
-- **[HIGH]** Body text `font-size` < 16px. Grep for `font-size` declarations on `body`, `p`, `.text`, or base styles. Values below 16px (or 1rem when base is 16px) are flagged.
+仅当存在 `DESIGN.md` 或 `design-system.md` 时检查：
 
-- **[HIGH]** More than 3 font families introduced in the diff. Count distinct `font-family` declarations. Flag if >3 unique families appear across changed files.
+- **[MEDIUM]** 使用了设计系统外的颜色
+- **[MEDIUM]** 使用了设计系统外的字体
+- **[MEDIUM]** 使用了设计系统外的间距值
 
-- **[HIGH]** Heading hierarchy skipping levels: `h1` followed by `h3` without an `h2` in the same file/component. Check HTML/JSX for heading tags.
+## 不要报告这些
 
-- **[HIGH]** Blacklisted fonts: Papyrus, Comic Sans, Lobster, Impact, Jokerman. Grep `font-family` for these names.
-
-### 3. Spacing & Layout (4 items)
-
-- **[MEDIUM]** Arbitrary spacing values not on a 4px or 8px scale, when DESIGN.md specifies a spacing scale. Check `margin`, `padding`, `gap` values against the stated scale. Only flag when DESIGN.md defines a scale.
-
-- **[MEDIUM]** Fixed widths without responsive handling: `width: NNNpx` on containers without `max-width` or `@media` breakpoints. Risk of horizontal scroll on mobile.
-
-- **[MEDIUM]** Missing `max-width` on text containers: body text or paragraph containers with no `max-width` set, allowing lines >75 characters. Check for `max-width` on text wrappers.
-
-- **[HIGH]** `!important` in new CSS rules. Grep for `!important` in added lines. Almost always a specificity escape hatch that should be fixed properly.
-
-### 4. Interaction States (3 items)
-
-- **[MEDIUM]** Interactive elements (buttons, links, inputs) missing hover/focus states. Check if `:hover` and `:focus` or `:focus-visible` pseudo-classes exist for new interactive element styles.
-
-- **[HIGH]** `outline: none` or `outline: 0` without a replacement focus indicator. Grep for `outline:\s*none` or `outline:\s*0`. This removes keyboard accessibility.
-
-- **[LOW]** Touch targets < 44px on interactive elements. Check `min-height`/`min-width`/`padding` on buttons and links. Requires computing effective size from multiple properties — low confidence from code alone.
-
-### 5. DESIGN.md Violations (3 items, conditional)
-
-Only apply if `DESIGN.md` or `design-system.md` exists:
-
-- **[MEDIUM]** Colors not in the stated palette. Compare color values in changed CSS against the palette defined in DESIGN.md.
-
-- **[MEDIUM]** Fonts not in the stated typography section. Compare `font-family` values against DESIGN.md's font list.
-
-- **[MEDIUM]** Spacing values outside the stated scale. Compare `margin`/`padding`/`gap` values against DESIGN.md's spacing scale.
-
----
-
-## Suppressions
-
-Do NOT flag:
-- Patterns explicitly documented in DESIGN.md as intentional choices
-- Third-party/vendor CSS files (node_modules, vendor directories)
-- CSS resets or normalize stylesheets
-- Test fixture files
-- Generated/minified CSS
+- 在 DESIGN.md 中明确声明为有意为之的模式
+- 第三方 / vendor CSS
+- reset / normalize
+- 测试夹具文件
+- 生成或压缩后的 CSS

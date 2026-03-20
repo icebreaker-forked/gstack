@@ -2,571 +2,206 @@
 
 ## Browse
 
-### Bundle server.ts into compiled binary
+### 将 `server.ts` 一并编进二进制
 
-**What:** Eliminate `resolveServerScript()` fallback chain entirely — bundle server.ts into the compiled browse binary.
-
-**Why:** The current fallback chain (check adjacent to cli.ts, check global install) is fragile and caused bugs in v0.3.2. A single compiled binary is simpler and more reliable.
-
-**Context:** Bun's `--compile` flag can bundle multiple entry points. The server is currently resolved at runtime via file path lookup. Bundling it removes the resolution step entirely.
-
-**Effort:** M
-**Priority:** P2
+**What:** 去掉 `resolveServerScript()` 的回退链，把 `server.ts` 直接打包进 `browse` 二进制。  
+**Why:** 当前依赖运行时路径查找，脆弱且已经引发过问题；单一二进制更简单、更可靠。  
+**Context:** Bun 的 `--compile` 支持多入口，理论上可以直接把服务端逻辑一起打进去。  
+**Effort:** M  
+**Priority:** P2  
 **Depends on:** None
 
-### Sessions (isolated browser instances)
+### 会话隔离（按名称区分浏览器实例）
 
-**What:** Isolated browser instances with separate cookies/storage/history, addressable by name.
-
-**Why:** Enables parallel testing of different user roles, A/B test verification, and clean auth state management.
-
-**Context:** Requires Playwright browser context isolation. Each session gets its own context with independent cookies/localStorage. Prerequisite for video recording (clean context lifecycle) and auth vault.
-
-**Effort:** L
+**What:** 支持多个相互隔离的浏览器会话，每个会话拥有独立 cookie、storage 和历史记录。  
+**Why:** 方便并行测试不同用户角色、不同授权状态和 A/B 验证。  
+**Context:** 需要利用 Playwright context 隔离；也是录像、状态持久化和 auth vault 的前置条件。  
+**Effort:** L  
 **Priority:** P3
 
-### Video recording
+### 浏览器交互录像
 
-**What:** Record browser interactions as video (start/stop controls).
+**What:** 录制浏览器交互视频，支持开始/停止。  
+**Why:** QA 报告和 PR 里都需要更直观的证据。  
+**Context:** 依赖隔离会话，且需要解决 WebM → GIF 或其他嵌入格式转换。  
+**Effort:** M  
+**Priority:** P3  
+**Depends on:** 会话隔离
 
-**Why:** Video evidence in QA reports and PR bodies. Currently deferred because `recreateContext()` destroys page state.
+### v20 Cookie 加密格式支持
 
-**Context:** Needs sessions for clean context lifecycle. Playwright supports video recording per context. Also needs WebM → GIF conversion for PR embedding.
-
-**Effort:** M
-**Priority:** P3
-**Depends on:** Sessions
-
-### v20 encryption format support
-
-**What:** AES-256-GCM support for future Chromium cookie DB versions (currently v10).
-
-**Why:** Future Chromium versions may change encryption format. Proactive support prevents breakage.
-
-**Effort:** S
+**What:** 为未来 Chromium cookie 数据库的 AES-256-GCM 格式做兼容。  
+**Why:** 避免浏览器升级后 cookie 导入失效。  
+**Effort:** S  
 **Priority:** P3
 
-### State persistence
+### 状态持久化
 
-**What:** Save/load cookies + localStorage to JSON files for reproducible test sessions.
+**What:** 将 cookies + localStorage 持久化为 JSON，并支持重新载入。  
+**Why:** 让 QA 会话可恢复、认证状态可复现。  
+**Context:** handoff 功能里的 `saveState()` / `restoreState()` 已经具备大部分状态抓取能力。  
+**Effort:** S  
+**Priority:** P3  
+**Depends on:** 会话隔离
 
-**Why:** Enables "resume where I left off" for QA sessions and repeatable auth states.
+### 凭据保险库
 
-**Context:** The `saveState()`/`restoreState()` helpers from the handoff feature (browser-manager.ts) already capture cookies + localStorage + sessionStorage + URLs. Adding file I/O on top is ~20 lines.
+**What:** 按名称引用的加密凭据存储，避免密码进入 LLM 上下文。  
+**Why:** 当前认证信息有机会穿过模型上下文，存在安全隐患。  
+**Effort:** L  
+**Priority:** P3  
+**Depends on:** 会话隔离、状态持久化
 
-**Effort:** S
-**Priority:** P3
-**Depends on:** Sessions
+### Iframe 支持
 
-### Auth vault
-
-**What:** Encrypted credential storage, referenced by name. LLM never sees passwords.
-
-**Why:** Security — currently auth credentials flow through the LLM context. Vault keeps secrets out of the AI's view.
-
-**Effort:** L
-**Priority:** P3
-**Depends on:** Sessions, state persistence
-
-### Iframe support
-
-**What:** `frame <sel>` and `frame main` commands for cross-frame interaction.
-
-**Why:** Many web apps use iframes (embeds, payment forms, ads). Currently invisible to browse.
-
-**Effort:** M
+**What:** 提供 `frame <sel>` 与 `frame main` 等跨 frame 交互能力。  
+**Why:** 许多网页把支付、嵌入和广告放在 iframe 中，目前 browse 看不到。  
+**Effort:** M  
 **Priority:** P4
 
-### Semantic locators
+### 语义定位器
 
-**What:** `find role/label/text/placeholder/testid` with attached actions.
-
-**Why:** More resilient element selection than CSS selectors or ref numbers.
-
-**Effort:** M
+**What:** 支持按 role / label / text / placeholder / testid 查找元素并附带动作。  
+**Why:** 比 CSS 选择器或引用编号更稳。  
+**Effort:** M  
 **Priority:** P4
 
-### Device emulation presets
+### 设备预设
 
-**What:** `set device "iPhone 16 Pro"` for mobile/tablet testing.
-
-**Why:** Responsive layout testing without manual viewport resizing.
-
-**Effort:** S
+**What:** 支持 `set device "iPhone 16 Pro"` 这类预设。  
+**Why:** 响应式测试不必手工调 viewport。  
+**Effort:** S  
 **Priority:** P4
 
-### Network mocking/routing
+### 网络 mock / 路由控制
 
-**What:** Intercept, block, and mock network requests.
-
-**Why:** Test error states, loading states, and offline behavior.
-
-**Effort:** M
+**What:** 拦截、阻断、模拟网络请求。  
+**Why:** 用于测试错误态、加载态和离线场景。  
+**Effort:** M  
 **Priority:** P4
 
-### Download handling
+### 下载处理
 
-**What:** Click-to-download with path control.
-
-**Why:** Test file download flows end-to-end.
-
-**Effort:** S
+**What:** 支持点击下载并可控输出路径。  
+**Why:** 端到端验证文件下载链路。  
+**Effort:** S  
 **Priority:** P4
 
-### Content safety
+### 内容安全控制
 
-**What:** `--max-output` truncation, `--allowed-domains` filtering.
-
-**Why:** Prevent context window overflow and restrict navigation to safe domains.
-
-**Effort:** S
+**What:** 增加 `--max-output` 截断和 `--allowed-domains` 域名白名单。  
+**Why:** 防止上下文窗口溢出，并限制跳转到不安全域名。  
+**Effort:** S  
 **Priority:** P4
 
-### Streaming (WebSocket live preview)
+### 流式预览
 
-**What:** WebSocket-based live preview for pair browsing sessions.
-
-**Why:** Enables real-time collaboration — human watches AI browse.
-
-**Effort:** L
+**What:** 基于 WebSocket 的实时预览，用于结对浏览。  
+**Why:** 让人类可以实时观看 AI 浏览过程。  
+**Effort:** L  
 **Priority:** P4
 
-### CDP mode
+### CDP 模式
 
-**What:** Connect to already-running Chrome/Electron apps via Chrome DevTools Protocol.
-
-**Why:** Test production apps, Electron apps, and existing browser sessions without launching new instances.
-
-**Effort:** M
+**What:** 连接已运行的 Chrome / Electron 应用。  
+**Why:** 便于测试生产浏览器实例、Electron 或既有会话。  
+**Effort:** M  
 **Priority:** P4
 
-### Linux/Windows cookie decryption
+### Linux / Windows Cookie 解密
 
-**What:** GNOME Keyring / kwallet / DPAPI support for non-macOS cookie import.
-
-**Why:** Cross-platform cookie import. Currently macOS-only (Keychain).
-
-**Effort:** L
+**What:** 支持 GNOME Keyring、kwallet、DPAPI 等。  
+**Why:** 让 cookie 导入不再局限于 macOS Keychain。  
+**Effort:** L  
 **Priority:** P4
 
 ## Ship
 
-### Ship log — persistent record of /ship runs
+### `/ship` 运行日志
 
-**What:** Append structured JSON entry to `.gstack/ship-log.json` at end of every /ship run (version, date, branch, PR URL, review findings, Greptile stats, todos completed, test results).
-
-**Why:** /retro has no structured data about shipping velocity. Ship log enables: PRs-per-week trending, review finding rates, Greptile signal over time, test suite growth.
-
-**Context:** /retro already reads greptile-history.md — same pattern. Eval persistence (eval-store.ts) shows the JSON append pattern exists in the codebase. ~15 lines in ship template.
-
-**Effort:** S
+**What:** 每次 `/ship` 结束后，向 `.gstack/ship-log.json` 追加结构化记录。  
+**Why:** 让 `/retro` 可以读取真实发版数据，如 PR 速度、review 质量和测试增长。  
+**Context:** 项目里已经有类似的 JSON append 模式。  
+**Effort:** S  
 **Priority:** P2
-**Depends on:** None
 
-### Post-deploy verification (ship + browse)
+### 发布后验证（ship + browse）
 
-**What:** After push, browse staging/preview URL, screenshot key pages, check console for JS errors, compare staging vs prod via snapshot diff. Include verification screenshots in PR body. STOP if critical errors found.
+**What:** push 完后自动打开 staging / preview，截图关键页面、检查 console，并比对 staging 与 prod。  
+**Why:** 把部署时回归尽量拦在合并前。  
+**Context:** 若要把截图写进 PR，需要额外的图片托管基础设施。  
+**Effort:** L  
+**Priority:** P2  
+**Depends on:** 上传能力、视觉注释能力
 
-**Why:** Catch deployment-time regressions (JS errors, broken layouts) before merge.
+### PR 中的视觉验证截图
 
-**Context:** Requires S3 upload infrastructure for PR screenshots. Pairs with visual PR annotations.
-
-**Effort:** L
-**Priority:** P2
-**Depends on:** /setup-gstack-upload, visual PR annotations
-
-### Visual verification with screenshots in PR body
-
-**What:** /ship Step 7.5: screenshot key pages after push, embed in PR body.
-
-**Why:** Visual evidence in PRs. Reviewers see what changed without deploying locally.
-
-**Context:** Part of Phase 3.6. Needs S3 upload for image hosting.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** /setup-gstack-upload
+**What:** `/ship` 在发 PR 前对关键页面截图，并嵌入 PR 正文。  
+**Why:** Reviewer 不必本地拉起即可看到变化。  
+**Effort:** M  
+**Priority:** P2  
+**Depends on:** 上传能力
 
 ## Review
 
-### Inline PR annotations
+### 行内 PR 注释
 
-**What:** /ship and /review post inline review comments at specific file:line locations using `gh api` to create pull request review comments.
-
-**Why:** Line-level annotations are more actionable than top-level comments. The PR thread becomes a line-by-line conversation between Greptile, Claude, and human reviewers.
-
-**Context:** GitHub supports inline review comments via `gh api repos/$REPO/pulls/$PR/reviews`. Pairs naturally with Phase 3.6 visual annotations.
-
-**Effort:** S
+**What:** `/ship` 和 `/review` 通过 `gh api` 直接在 `file:line` 位置发 review comment。  
+**Why:** 比起顶层评论，行内评论更可操作，也更适合人机共同审查。  
+**Effort:** S  
 **Priority:** P2
-**Depends on:** None
 
-### Greptile training feedback export
+### Greptile 反馈导出
 
-**What:** Aggregate greptile-history.md into machine-readable JSON summary of false positive patterns, exportable to the Greptile team for model improvement.
+**What:** 将 `greptile-history.md` 聚合为机器可读 JSON，便于导出给 Greptile 团队。  
+**Why:** 让误报模式真正形成反馈闭环。  
+**Effort:** S  
+**Priority:** P2  
+**Depends on:** 积累足够多的 FP 数据
 
-**Why:** Closes the feedback loop — Greptile can use FP data to stop making the same mistakes on your codebase.
+### 视觉评审与标注截图
 
-**Context:** Was a P3 Future Idea. Upgraded to P2 now that greptile-history.md data infrastructure exists. The signal data is already being collected; this just makes it exportable. ~40 lines.
-
-**Effort:** S
+**What:** `/review` 在预览环境打开改动页面，生成标注截图，和生产环境比对。  
+**Why:** 视觉回归是纯代码评审很难发现的一类问题。  
+**Effort:** M  
 **Priority:** P2
-**Depends on:** Enough FP data accumulated (10+ entries)
-
-### Visual review with annotated screenshots
-
-**What:** /review Step 4.5: browse PR's preview deploy, annotated screenshots of changed pages, compare against production, check responsive layouts, verify accessibility tree.
-
-**Why:** Visual diff catches layout regressions that code review misses.
-
-**Context:** Part of Phase 3.6. Needs S3 upload for image hosting.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** /setup-gstack-upload
 
 ## QA
 
-### QA trend tracking
+### 更强的回归测试自动补齐
 
-**What:** Compare baseline.json over time, detect regressions across QA runs.
-
-**Why:** Spot quality trends — is the app getting better or worse?
-
-**Context:** QA already writes structured reports. This adds cross-run comparison.
-
-**Effort:** S
-**Priority:** P2
-
-### CI/CD QA integration
-
-**What:** `/qa` as GitHub Action step, fail PR if health score drops.
-
-**Why:** Automated quality gate in CI. Catch regressions before merge.
-
-**Effort:** M
-**Priority:** P2
-
-### Smart default QA tier
-
-**What:** After a few runs, check index.md for user's usual tier pick, skip the AskUserQuestion.
-
-**Why:** Reduces friction for repeat users.
-
-**Effort:** S
-**Priority:** P2
-
-### Accessibility audit mode
-
-**What:** `--a11y` flag for focused accessibility testing.
-
-**Why:** Dedicated accessibility testing beyond the general QA checklist.
-
-**Effort:** S
+**What:** 对 `/qa` 修复出的每个问题，自动生成更接近真实场景的回归测试草案。  
+**Why:** 目前能补一部分，但还不够稳定和系统。  
+**Effort:** M  
 **Priority:** P3
 
-### CI/CD generation for non-GitHub providers
+### 更完整的 QA 报告索引
 
-**What:** Extend CI/CD bootstrap to generate GitLab CI (`.gitlab-ci.yml`), CircleCI (`.circleci/config.yml`), and Bitrise pipelines.
-
-**Why:** Not all projects use GitHub Actions. Universal CI/CD bootstrap would make test bootstrap work for everyone.
-
-**Context:** v1 ships with GitHub Actions only. Detection logic already checks for `.gitlab-ci.yml`, `.circleci/`, `bitrise.yml` and skips with an informational note. Each provider needs ~20 lines of template text in `generateTestBootstrap()`.
-
-**Effort:** M
+**What:** 自动维护按日期、分支和 PR 聚合的 QA 历史索引。  
+**Why:** 方便比较同一功能在多次修复后的质量趋势。  
+**Effort:** S  
 **Priority:** P3
-**Depends on:** Test bootstrap (shipped)
-
-### Auto-upgrade weak tests (★) to strong tests (★★★)
-
-**What:** When Step 3.4 coverage audit identifies existing ★-rated tests (smoke/trivial assertions), generate improved versions testing edge cases and error paths.
-
-**Why:** Many codebases have tests that technically exist but don't catch real bugs — `expect(component).toBeDefined()` isn't testing behavior. Upgrading these closes the gap between "has tests" and "has good tests."
-
-**Context:** Requires the quality scoring rubric from the test coverage audit. Modifying existing test files is riskier than creating new ones — needs careful diffing to ensure the upgraded test still passes. Consider creating a companion test file rather than modifying the original.
-
-**Effort:** M
-**Priority:** P3
-**Depends on:** Test quality scoring (shipped)
-
-## Retro
-
-### Deployment health tracking (retro + browse)
-
-**What:** Screenshot production state, check perf metrics (page load times), count console errors across key pages, track trends over retro window.
-
-**Why:** Retro should include production health alongside code metrics.
-
-**Context:** Requires browse integration. Screenshots + metrics fed into retro output.
-
-**Effort:** L
-**Priority:** P3
-**Depends on:** Browse sessions
 
 ## Infrastructure
 
-### /setup-gstack-upload skill (S3 bucket)
+### 通用上传能力
 
-**What:** Configure S3 bucket for image hosting. One-time setup for visual PR annotations.
-
-**Why:** Prerequisite for visual PR annotations in /ship and /review.
-
-**Effort:** M
+**What:** 提供 gstack 统一的截图 / 附件上传能力。  
+**Why:** ship、review、qa 都会逐步需要稳定的图片与报告托管。  
+**Effort:** L  
 **Priority:** P2
 
-### gstack-upload helper
+### 更细的多宿主适配测试
 
-**What:** `browse/bin/gstack-upload` — upload file to S3, return public URL.
-
-**Why:** Shared utility for all skills that need to embed images in PRs.
-
-**Effort:** S
+**What:** 强化 Claude / Codex / 其他宿主的输出一致性检查。  
+**Why:** 模板越来越多，共享逻辑越来越复杂，需要更强回归防线。  
+**Effort:** M  
 **Priority:** P2
-**Depends on:** /setup-gstack-upload
-
-### WebM to GIF conversion
-
-**What:** ffmpeg-based WebM → GIF conversion for video evidence in PRs.
-
-**Why:** GitHub PR bodies render GIFs but not WebM. Needed for video recording evidence.
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** Video recording
-
-### Deploy-verify skill
-
-**What:** Lightweight post-deploy smoke test: hit key URLs, verify 200s, screenshot critical pages, console error check, compare against baseline snapshots. Pass/fail with evidence.
-
-**Why:** Fast post-deploy confidence check, separate from full QA.
-
-**Effort:** M
-**Priority:** P2
-
-### GitHub Actions eval upload
-
-**What:** Run eval suite in CI, upload result JSON as artifact, post summary comment on PR.
-
-**Why:** CI integration catches quality regressions before merge and provides persistent eval records per PR.
-
-**Context:** Requires `ANTHROPIC_API_KEY` in CI secrets. Cost is ~$4/run. Eval persistence system (v0.3.6) writes JSON to `~/.gstack-dev/evals/` — CI would upload as GitHub Actions artifacts and use `eval:compare` to post delta comment.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** Eval persistence (shipped in v0.3.6)
-
-### E2E model pinning
-
-**What:** Pin E2E tests to claude-sonnet-4-6 for cost efficiency, add retry:2 for flaky LLM responses.
-
-**Why:** Reduce E2E test cost and flakiness.
-
-**Effort:** XS
-**Priority:** P2
-
-### Eval web dashboard
-
-**What:** `bun run eval:dashboard` serves local HTML with charts: cost trending, detection rate, pass/fail history.
-
-**Why:** Visual charts better for spotting trends than CLI tools.
-
-**Context:** Reads `~/.gstack-dev/evals/*.json`. ~200 lines HTML + chart.js via Bun HTTP server.
-
-**Effort:** M
-**Priority:** P3
-**Depends on:** Eval persistence (shipped in v0.3.6)
-
-### CI/CD QA quality gate
-
-**What:** Run `/qa` as a GitHub Action step, fail PR if health score drops below threshold.
-
-**Why:** Automated quality gate catches regressions before merge. Currently QA is manual — CI integration makes it part of the standard workflow.
-
-**Context:** Requires headless browse binary available in CI. The `/qa` skill already produces `baseline.json` with health scores — CI step would compare against the main branch baseline and fail if score drops. Would need `ANTHROPIC_API_KEY` in CI secrets since `/qa` uses Claude.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** None
-
-### Cross-platform URL open helper
-
-**What:** `gstack-open-url` helper script — detect platform, use `open` (macOS) or `xdg-open` (Linux).
-
-**Why:** The first-time Completeness Principle intro uses macOS `open` to launch the essay. If gstack ever supports Linux, this silently fails.
-
-**Effort:** S (human: ~30 min / CC: ~2 min)
-**Priority:** P4
-**Depends on:** Nothing
-
-### CDP-based DOM mutation detection for ref staleness
-
-**What:** Use Chrome DevTools Protocol `DOM.documentUpdated` / MutationObserver events to proactively invalidate stale refs when the DOM changes, without requiring an explicit `snapshot` call.
-
-**Why:** Current ref staleness detection (async count() check) only catches stale refs at action time. CDP mutation detection would proactively warn when refs become stale, preventing the 5-second timeout entirely for SPA re-renders.
-
-**Context:** Parts 1+2 of ref staleness fix (RefEntry metadata + eager validation via count()) are shipped. This is Part 3 — the most ambitious piece. Requires CDP session alongside Playwright, MutationObserver bridge, and careful performance tuning to avoid overhead on every DOM change.
-
-**Effort:** L
-**Priority:** P3
-**Depends on:** Ref staleness Parts 1+2 (shipped)
-
-## Office Hours / Design
-
-### Design docs → Supabase team store sync
-
-**What:** Add design docs (`*-design-*.md`) to the Supabase sync pipeline alongside test plans, retro snapshots, and QA reports.
-
-**Why:** Cross-team design discovery at scale. Local `~/.gstack/projects/$SLUG/` keyword-grep discovery works for same-machine users now, but Supabase sync makes it work across the whole team. Duplicate ideas surface, everyone sees what's been explored.
-
-**Context:** /office-hours writes design docs to `~/.gstack/projects/$SLUG/`. The team store already syncs test plans, retro snapshots, QA reports. Design docs follow the same pattern — just add a sync adapter.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** `garrytan/team-supabase-store` branch landing on main
-
-### /yc-prep skill
-
-**What:** Skill that helps founders prepare their YC application after /office-hours identifies strong signal. Pulls from the design doc, structures answers to YC app questions, runs a mock interview.
-
-**Why:** Closes the loop. /office-hours identifies the founder, /yc-prep helps them apply well. The design doc already contains most of the raw material for a YC application.
-
-**Effort:** M (human: ~2 weeks / CC: ~2 hours)
-**Priority:** P2
-**Depends on:** office-hours founder discovery engine shipping first
-
-## Design Review
-
-### /plan-design-review + /qa-design-review + /design-consultation — SHIPPED
-
-Shipped as v0.5.0 on main. Includes `/plan-design-review` (report-only design audit), `/qa-design-review` (audit + fix loop), and `/design-consultation` (interactive DESIGN.md creation). `{{DESIGN_METHODOLOGY}}` resolver provides shared 80-item design audit checklist.
-
-## Document-Release
-
-### Auto-invoke /document-release from /ship — SHIPPED
-
-Shipped in v0.8.3. Step 8.5 added to `/ship` — after creating the PR, `/ship` automatically reads `document-release/SKILL.md` and executes the doc update workflow. Zero-friction doc updates.
-
-### `{{DOC_VOICE}}` shared resolver
-
-**What:** Create a placeholder resolver in gen-skill-docs.ts encoding the gstack voice guide (friendly, user-forward, lead with benefits). Inject into /ship Step 5, /document-release Step 5, and reference from CLAUDE.md.
-
-**Why:** DRY — voice rules currently live inline in 3 places (CLAUDE.md CHANGELOG style section, /ship Step 5, /document-release Step 5). When the voice evolves, all three drift.
-
-**Context:** Same pattern as `{{QA_METHODOLOGY}}` — shared block injected into multiple templates to prevent drift. ~20 lines in gen-skill-docs.ts.
-
-**Effort:** S
-**Priority:** P2
-**Depends on:** None
-
-## Ship Confidence Dashboard
-
-### Smart review relevance detection — PARTIALLY SHIPPED
-
-~~**What:** Auto-detect which of the 4 reviews are relevant based on branch changes (skip Design Review if no CSS/view changes, skip Code Review if plan-only).~~
-
-`bin/gstack-diff-scope` shipped — categorizes diff into SCOPE_FRONTEND, SCOPE_BACKEND, SCOPE_PROMPTS, SCOPE_TESTS, SCOPE_DOCS, SCOPE_CONFIG. Used by design-review-lite to skip when no frontend files changed. Dashboard integration for conditional row display is a follow-up.
-
-**Remaining:** Dashboard conditional row display (hide "Design Review: NOT YET RUN" when SCOPE_FRONTEND=false). Extend to Eng Review (skip for docs-only) and CEO Review (skip for config-only).
-
-**Effort:** S
-**Priority:** P3
-**Depends on:** gstack-diff-scope (shipped)
-
-### /merge skill — review-gated PR merge
-
-**What:** Create a `/merge` skill that merges an approved PR, but first checks the Review Readiness Dashboard and runs `/review` (Fix-First) if code review hasn't been done. Separates "ship" (create PR) from "merge" (land it).
-
-**Why:** Currently `/review` runs inside `/ship` Step 3.5 but isn't tracked as a gate. A `/merge` skill ensures code review always happens before landing, and enables workflows where someone else reviews the PR first.
-
-**Context:** `/ship` creates the PR. `/merge` would: check dashboard → run `/review` if needed → `gh pr merge`. This is where code review tracking belongs — at merge time, not at plan time.
-
-**Effort:** M
-**Priority:** P2
-**Depends on:** Ship Confidence Dashboard (shipped)
-
-## Completeness
-
-### Completeness metrics dashboard
-
-**What:** Track how often Claude chooses the complete option vs shortcut across gstack sessions. Aggregate into a dashboard showing completeness trend over time.
-
-**Why:** Without measurement, we can't know if the Completeness Principle is working. Could surface patterns (e.g., certain skills still bias toward shortcuts).
-
-**Context:** Would require logging choices (e.g., append to a JSONL file when AskUserQuestion resolves), parsing them, and displaying trends. Similar pattern to eval persistence.
-
-**Effort:** M (human) / S (CC)
-**Priority:** P3
-**Depends on:** Boil the Lake shipped (v0.6.1)
-
-## Safety & Observability
-
-### On-demand hook skills (/careful, /freeze, /guard) — SHIPPED
-
-~~**What:** Three new skills that use Claude Code's session-scoped PreToolUse hooks to add safety guardrails on demand.~~
-
-Shipped as `/careful`, `/freeze`, `/guard`, and `/unfreeze` in v0.6.5. Includes hook fire-rate telemetry (pattern name only, no command content) and inline skill activation telemetry.
-
-### Skill usage telemetry — SHIPPED
-
-~~**What:** Track which skills get invoked, how often, from which repo.~~
-
-Shipped in v0.6.5. TemplateContext in gen-skill-docs.ts bakes skill name into preamble telemetry line. Analytics CLI (`bun run analytics`) for querying. /retro integration shows skills-used-this-week.
-
-### /investigate scoped debugging enhancements (gated on telemetry)
-
-**What:** Six enhancements to /investigate auto-freeze, contingent on telemetry showing the freeze hook actually fires in real debugging sessions.
-
-**Why:** /investigate v0.7.1 auto-freezes edits to the module being debugged. If telemetry shows the hook fires often, these enhancements make the experience smarter. If it never fires, the problem wasn't real and these aren't worth building.
-
-**Context:** All items are prose additions to `investigate/SKILL.md.tmpl`. No new scripts.
-
-**Items:**
-1. Stack trace auto-detection for freeze directory (parse deepest app frame)
-2. Freeze boundary widening (ask to widen instead of hard-block when hitting boundary)
-3. Post-fix auto-unfreeze + full test suite run
-4. Debug instrumentation cleanup (tag with DEBUG-TEMP, remove before commit)
-5. Debug session persistence (~/.gstack/investigate-sessions/ — save investigation for reuse)
-6. Investigation timeline in debug report (hypothesis log with timing)
-
-**Effort:** M (all 6 combined)
-**Priority:** P3
-**Depends on:** Telemetry data showing freeze hook fires in real /investigate sessions
 
 ## Completed
 
-### Phase 1: Foundations (v0.2.0)
-- Rename to gstack
-- Restructure to monorepo layout
-- Setup script for skill symlinks
-- Snapshot command with ref-based element selection
-- Snapshot tests
-**Completed:** v0.2.0
+已完成事项请保留原条目内容，并追加：
 
-### Phase 2: Enhanced Browser (v0.2.0)
-- Annotated screenshots, snapshot diffing, dialog handling, file upload
-- Cursor-interactive elements, element state checks
-- CircularBuffer, async buffer flush, health check
-- Playwright error wrapping, useragent fix
-- 148 integration tests
-**Completed:** v0.2.0
-
-### Phase 3: QA Testing Agent (v0.3.0)
-- /qa SKILL.md with 6-phase workflow, 3 modes (full/quick/regression)
-- Issue taxonomy, severity classification, exploration checklist
-- Report template, health score rubric, framework detection
-- wait/console/cookie-import commands, find-browse binary
-**Completed:** v0.3.0
-
-### Phase 3.5: Browser Cookie Import (v0.3.x)
-- cookie-import-browser command (Chromium cookie DB decryption)
-- Cookie picker web UI, /setup-browser-cookies skill
-- 18 unit tests, browser registry (Comet, Chrome, Arc, Brave, Edge)
-**Completed:** v0.3.1
-
-### E2E test cost tracking
-- Track cumulative API spend, warn if over threshold
-**Completed:** v0.3.6
-
-### Auto-upgrade mode + smart update check
-- Config CLI (`bin/gstack-config`), auto-upgrade via `~/.gstack/config.yaml`, 12h cache TTL, exponential snooze backoff (24h→48h→1wk), "never ask again" option, vendored copy sync on upgrade
-**Completed:** v0.3.8
+```markdown
+**Completed:** vX.Y.Z (YYYY-MM-DD)
+```

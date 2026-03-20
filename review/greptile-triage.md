@@ -1,22 +1,19 @@
-# Greptile Comment Triage
+# Greptile 评论分诊
 
-Shared reference for fetching, filtering, and classifying Greptile review comments on GitHub PRs. Both `/review` (Step 2.5) and `/ship` (Step 3.75) reference this document.
+这是在 GitHub PR 上抓取、过滤和分类 Greptile review comment 的共享参考文档。`/review`（Step 2.5）和 `/ship`（Step 3.75）都会引用它。
 
----
+## 抓取
 
-## Fetch
-
-Run these commands to detect the PR and fetch comments. Both API calls run in parallel.
+先检测当前 PR，再抓取评论。两个 API 调用并行执行。
 
 ```bash
 REPO=$(gh repo view --json nameWithOwner --jq '.nameWithOwner' 2>/dev/null)
 PR_NUMBER=$(gh pr view --json number --jq '.number' 2>/dev/null)
 ```
 
-**If either fails or is empty:** Skip Greptile triage silently. This integration is additive — the workflow works without it.
+如果任一命令失败或为空：静默跳过 Greptile 分诊。这个集成是增强项，不应阻塞主流程。
 
 ```bash
-# Fetch line-level review comments AND top-level PR comments in parallel
 gh api repos/$REPO/pulls/$PR_NUMBER/comments \
   --jq '.[] | select(.user.login == "greptile-apps[bot]") | select(.position != null) | {id: .id, path: .path, line: .line, body: .body, html_url: .html_url, source: "line-level"}' > /tmp/greptile_line.json &
 gh api repos/$REPO/issues/$PR_NUMBER/comments \
@@ -24,197 +21,187 @@ gh api repos/$REPO/issues/$PR_NUMBER/comments \
 wait
 ```
 
-**If API errors or zero Greptile comments across both endpoints:** Skip silently.
+若 API 失败，或两个端点都没有 Greptile 评论，也要静默跳过。
 
-The `position != null` filter on line-level comments automatically skips outdated comments from force-pushed code.
+`position != null` 用于过滤掉 force-push 后已经过时的行级评论。
 
----
+## 抑制检查
 
-## Suppressions Check
+先推导项目级历史文件路径：
 
-Derive the project-specific history path:
 ```bash
 REMOTE_SLUG=$(browse/bin/remote-slug 2>/dev/null || ~/.claude/skills/gstack/browse/bin/remote-slug 2>/dev/null || basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 PROJECT_HISTORY="$HOME/.gstack/projects/$REMOTE_SLUG/greptile-history.md"
 ```
 
-Read `$PROJECT_HISTORY` if it exists (per-project suppressions). Each line records a previous triage outcome:
+如果 `$PROJECT_HISTORY` 存在，则读取它。文件每一行表示一次过往分诊结果：
 
-```
+```text
 <date> | <repo> | <type:fp|fix|already-fixed> | <file-pattern> | <category>
 ```
 
-**Categories** (fixed set): `race-condition`, `null-check`, `error-handling`, `style`, `type-safety`, `security`, `performance`, `correctness`, `other`
+类别固定为：`race-condition`、`null-check`、`error-handling`、`style`、`type-safety`、`security`、`performance`、`correctness`、`other`
 
-Match each fetched comment against entries where:
-- `type == fp` (only suppress known false positives, not previously fixed real issues)
-- `repo` matches the current repo
-- `file-pattern` matches the comment's file path
-- `category` matches the issue type in the comment
+匹配规则：
 
-Skip matched comments as **SUPPRESSED**.
+- 只对 `type == fp` 的历史记录做 suppress
+- `repo` 必须匹配当前仓库
+- `file-pattern` 必须匹配当前评论对应文件
+- `category` 必须匹配该评论的问题类型
 
-If the history file doesn't exist or has unparseable lines, skip those lines and continue — never fail on a malformed history file.
+匹配成功的评论标记为 **SUPPRESSED** 并跳过。
 
----
+如果历史文件不存在，或某几行无法解析，则忽略那些异常行并继续，不允许因此失败。
 
-## Classify
+## 分类
 
-For each non-suppressed comment:
+对每条未被 suppress 的评论：
 
-1. **Line-level comments:** Read the file at the indicated `path:line` and surrounding context (±10 lines)
-2. **Top-level comments:** Read the full comment body
-3. Cross-reference the comment against the full diff (`git diff origin/main`) and the review checklist
-4. Classify:
-   - **VALID & ACTIONABLE** — a real bug, race condition, security issue, or correctness problem that exists in the current code
-   - **VALID BUT ALREADY FIXED** — a real issue that was addressed in a subsequent commit on the branch. Identify the fixing commit SHA.
-   - **FALSE POSITIVE** — the comment misunderstands the code, flags something handled elsewhere, or is stylistic noise
-   - **SUPPRESSED** — already filtered in the suppressions check above
+1. 行级评论：读取指定 `path:line` 及其上下文（±10 行）
+2. 顶层评论：读取完整评论正文
+3. 将评论与完整 diff（`git diff origin/main`）以及 review checklist 交叉比对
+4. 归类为以下四种之一：
 
----
+- **VALID & ACTIONABLE**：当前代码里真实存在的问题
+- **VALID BUT ALREADY FIXED**：问题真实存在，但已经在当前分支后续提交中修复；需指出修复 commit
+- **FALSE POSITIVE**：误报、误读、风格噪声，或问题已由别处安全处理
+- **SUPPRESSED**：在前面的 suppressions check 已被过滤
 
-## Reply APIs
+## 回复 API
 
-When replying to Greptile comments, use the correct endpoint based on comment source:
+根据评论来源使用不同端点：
 
-**Line-level comments** (from `pulls/$PR/comments`):
+**行级评论**：
+
 ```bash
 gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies \
   -f body="<reply text>"
 ```
 
-**Top-level comments** (from `issues/$PR/comments`):
+**顶层评论**：
+
 ```bash
 gh api repos/$REPO/issues/$PR_NUMBER/comments \
   -f body="<reply text>"
 ```
 
-**If a reply POST fails** (e.g., PR was closed, no write permission): warn and continue. Do not stop the workflow for a failed reply.
+如果回复失败，例如 PR 已关闭或没有写权限，应记录警告并继续，不能因此中断流程。
 
----
+## 回复模板
 
-## Reply Templates
+### Tier 1：第一次回复
 
-Use these templates for every Greptile reply. Always include concrete evidence — never post vague replies.
+**修复完成：**
 
-### Tier 1 (First response) — Friendly, evidence-included
-
-**For FIXES (user chose to fix the issue):**
-
-```
+```text
 **Fixed** in `<commit-sha>`.
 
-\`\`\`diff
-- <old problematic line(s)>
-+ <new fixed line(s)>
-\`\`\`
-
-**Why:** <1-sentence explanation of what was wrong and how the fix addresses it>
+```diff
+- <旧代码>
++ <新代码>
 ```
 
-**For ALREADY FIXED (issue addressed in a prior commit on the branch):**
-
+**Why:** <一句话说明问题与修复逻辑>
 ```
+
+**已经在之前提交修复：**
+
+```text
 **Already fixed** in `<commit-sha>`.
 
-**What was done:** <1-2 sentences describing how the existing commit addresses this issue>
+**What was done:** <1-2 句说明修复方式>
 ```
 
-**For FALSE POSITIVES (the comment is incorrect):**
+**误报：**
 
-```
-**Not a bug.** <1 sentence directly stating why this is incorrect>
+```text
+**Not a bug.** <一句话说明为什么它不成立>
 
 **Evidence:**
-- <specific code reference showing the pattern is safe/correct>
-- <e.g., "The nil check is handled by `ActiveRecord::FinderMethods#find` which raises RecordNotFound, not nil">
+- <具体代码证据>
+- <必要时补充框架或实现语义>
 
-**Suggested re-rank:** This appears to be a `<style|noise|misread>` issue, not a `<what Greptile called it>`. Consider lowering severity.
+**Suggested re-rank:** 这更像是 `<style|noise|misread>`，而不是 `<Greptile 原分类>`。
 ```
 
-### Tier 2 (Greptile re-flags after prior reply) — Firm, overwhelming evidence
+### Tier 2：重复误报后的强硬回复
 
-Use Tier 2 when escalation detection (below) identifies a prior GStack reply on the same thread. Include maximum evidence to close the discussion.
+当同一线程里已经有过 GStack 回复，但 Greptile 仍重复标记时，使用更强证据链：
 
-```
+```text
 **This has been reviewed and confirmed as [intentional/already-fixed/not-a-bug].**
 
-\`\`\`diff
-<full relevant diff showing the change or safe pattern>
-\`\`\`
-
-**Evidence chain:**
-1. <file:line permalink showing the safe pattern or fix>
-2. <commit SHA where it was addressed, if applicable>
-3. <architecture rationale or design decision, if applicable>
-
-**Suggested re-rank:** Please recalibrate — this is a `<actual category>` issue, not `<claimed category>`. [Link to specific file change permalink if helpful]
+```diff
+<完整相关 diff>
 ```
 
----
+**Evidence chain:**
+1. <file:line 证据>
+2. <修复 commit SHA，如适用>
+3. <架构或设计理由，如适用>
 
-## Escalation Detection
+**Suggested re-rank:** 请重新校准，这更接近 `<实际分类>`，而不是 `<Greptile 声称分类>`。
+```
 
-Before composing a reply, check if a prior GStack reply already exists on this comment thread:
+## 升级判定
 
-1. **For line-level comments:** Fetch replies via `gh api repos/$REPO/pulls/$PR_NUMBER/comments/$COMMENT_ID/replies`. Check if any reply body contains GStack markers: `**Fixed**`, `**Not a bug.**`, `**Already fixed**`.
+在生成回复前，先判断同一线程里是否已有过 GStack 回复：
 
-2. **For top-level comments:** Scan the fetched issue comments for replies posted after the Greptile comment that contain GStack markers.
+1. 行级评论：抓取 replies，检查回复正文中是否包含 `**Fixed**`、`**Not a bug.**`、`**Already fixed**`
+2. 顶层评论：扫描该 PR issue comments，寻找在 Greptile 评论之后、且包含上述标记的回复
+3. 如果已经有 GStack 回复，而 Greptile 又在同一文件 + 同一类别重复提示，则使用 Tier 2
+4. 如果没有，则使用 Tier 1
 
-3. **If a prior GStack reply exists AND Greptile posted again on the same file+category:** Use Tier 2 (firm) templates.
+若升级判定本身失败或有歧义，默认使用 Tier 1，不在模糊场景中升级语气。
 
-4. **If no prior GStack reply exists:** Use Tier 1 (friendly) templates.
+## 严重程度重分级
 
-If escalation detection fails (API error, ambiguous thread): default to Tier 1. Never escalate on ambiguity.
+分类时，也要判断 Greptile 暗示的严重级别是否合理：
 
----
+- 如果 Greptile 把风格 / 性能小问题当成安全 / 正确性 / 竞态问题，应在回复中明确要求重分级
+- 如果低严重度问题被写得像致命问题，也应指出
+- 必须给出具体代码与行号作为依据，不能只表达主观看法
 
-## Severity Assessment & Re-ranking
+## 历史文件写入
 
-When classifying comments, also assess whether Greptile's implied severity matches reality:
+写入前确保目录存在：
 
-- If Greptile flags something as a **security/correctness/race-condition** issue but it's actually a **style/performance** nit: include `**Suggested re-rank:**` in the reply requesting the category be corrected.
-- If Greptile flags a low-severity style issue as if it were critical: push back in the reply.
-- Always be specific about why the re-ranking is warranted — cite code and line numbers, not opinions.
-
----
-
-## History File Writes
-
-Before writing, ensure both directories exist:
 ```bash
 REMOTE_SLUG=$(browse/bin/remote-slug 2>/dev/null || ~/.claude/skills/gstack/browse/bin/remote-slug 2>/dev/null || basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)")
 mkdir -p "$HOME/.gstack/projects/$REMOTE_SLUG"
 mkdir -p ~/.gstack
 ```
 
-Append one line per triage outcome to **both** files (per-project for suppressions, global for retro):
-- `~/.gstack/projects/$REMOTE_SLUG/greptile-history.md` (per-project)
-- `~/.gstack/greptile-history.md` (global aggregate)
+对每条分诊结果，向两个文件各追加一行：
 
-Format:
-```
+- `~/.gstack/projects/$REMOTE_SLUG/greptile-history.md`
+- `~/.gstack/greptile-history.md`
+
+格式：
+
+```text
 <YYYY-MM-DD> | <owner/repo> | <type> | <file-pattern> | <category>
 ```
 
-Example entries:
-```
+示例：
+
+```text
 2026-03-13 | garrytan/myapp | fp | app/services/auth_service.rb | race-condition
 2026-03-13 | garrytan/myapp | fix | app/models/user.rb | null-check
 2026-03-13 | garrytan/myapp | already-fixed | lib/payments.rb | error-handling
 ```
 
----
+## 输出格式
 
-## Output Format
+在最终输出头部附加 Greptile 摘要：
 
-Include a Greptile summary in the output header:
-```
+```text
 + N Greptile comments (X valid, Y fixed, Z FP)
 ```
 
-For each classified comment, show:
-- Classification tag: `[VALID]`, `[FIXED]`, `[FALSE POSITIVE]`, `[SUPPRESSED]`
-- File:line reference (for line-level) or `[top-level]` (for top-level)
-- One-line body summary
-- Permalink URL (the `html_url` field)
+对每条评论显示：
+
+- 分类标签：`[VALID]`、`[FIXED]`、`[FALSE POSITIVE]`、`[SUPPRESSED]`
+- `file:line`，若为顶层评论则写 `[top-level]`
+- 一行摘要
+- 对应 `html_url`

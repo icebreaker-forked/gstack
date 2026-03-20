@@ -1,172 +1,183 @@
-# Pre-Landing Review Checklist
+# 合并前评审清单
 
-## Instructions
+## 说明
 
-Review the `git diff origin/main` output for the issues listed below. Be specific — cite `file:line` and suggest fixes. Skip anything that's fine. Only flag real problems.
+请针对 `git diff origin/main` 的输出检查下面这些问题。要具体，给出 `file:line`，并附上修复建议。没有问题的项直接跳过，只报告真实风险。
 
-**Two-pass review:**
-- **Pass 1 (CRITICAL):** Run SQL & Data Safety and LLM Output Trust Boundary first. Highest severity.
-- **Pass 2 (INFORMATIONAL):** Run all remaining categories. Lower severity but still actioned.
+**两轮评审：**
 
-All findings get action via Fix-First Review: obvious mechanical fixes are applied automatically,
-genuinely ambiguous issues are batched into a single user question.
+- **第一轮（CRITICAL）**：先看 SQL / 数据安全 与 LLM 输出信任边界
+- **第二轮（INFORMATIONAL）**：再看其余类别
 
-**Output format:**
+所有发现都走 Fix-First Review：明显的机械性问题自动修，真正有歧义的问题集中问用户一次。
 
-```
+**输出格式：**
+
+```text
 Pre-Landing Review: N issues (X critical, Y informational)
 
 **AUTO-FIXED:**
-- [file:line] Problem → fix applied
+- [file:line] 问题 → 已应用修复
 
 **NEEDS INPUT:**
-- [file:line] Problem description
-  Recommended fix: suggested fix
+- [file:line] 问题描述
+  Recommended fix: 建议修复方式
 ```
 
-If no issues found: `Pre-Landing Review: No issues found.`
+如果没有问题：`Pre-Landing Review: No issues found.`
 
-Be terse. For each issue: one line describing the problem, one line with the fix. No preamble, no summaries, no "looks good overall."
+保持简洁。每个问题只写一行问题说明和一行修复建议，不要写前言、总结或 “整体看起来不错” 之类的话。
 
----
+## 评审类别
 
-## Review Categories
+### 第一轮：CRITICAL
 
-### Pass 1 — CRITICAL
+#### SQL 与数据安全
 
-#### SQL & Data Safety
-- String interpolation in SQL (even if values are `.to_i`/`.to_f` — use parameterized queries (Rails: sanitize_sql_array/Arel; Node: prepared statements; Python: parameterized queries))
-- TOCTOU races: check-then-set patterns that should be atomic `WHERE` + `update_all`
-- Bypassing model validations for direct DB writes (Rails: update_column; Django: QuerySet.update(); Prisma: raw queries)
-- N+1 queries: Missing eager loading (Rails: .includes(); SQLAlchemy: joinedload(); Prisma: include) for associations used in loops/views
+- SQL 中使用字符串插值，即使值先做了 `.to_i` / `.to_f`，仍应改为参数化查询
+- TOCTOU 竞态：先检查再修改，本应通过原子 `WHERE` + `UPDATE` 完成
+- 直接写数据库绕过模型校验
+- N+1 查询：循环或视图中使用关联却没有预加载
 
-#### Race Conditions & Concurrency
-- Read-check-write without uniqueness constraint or catch duplicate key error and retry (e.g., `where(hash:).first` then `save!` without handling concurrent insert)
-- find-or-create without unique DB index — concurrent calls can create duplicates
-- Status transitions that don't use atomic `WHERE old_status = ? UPDATE SET new_status` — concurrent updates can skip or double-apply transitions
-- Unsafe HTML rendering (Rails: .html_safe/raw(); React: dangerouslySetInnerHTML; Vue: v-html; Django: |safe/mark_safe) on user-controlled data (XSS)
+#### 竞态与并发
 
-#### LLM Output Trust Boundary
-- LLM-generated values (emails, URLs, names) written to DB or passed to mailers without format validation. Add lightweight guards (`EMAIL_REGEXP`, `URI.parse`, `.strip`) before persisting.
-- Structured tool output (arrays, hashes) accepted without type/shape checks before database writes.
+- 读检查写，没有唯一约束，也没有在冲突后重试
+- find-or-create 缺少唯一索引，导致并发写出重复数据
+- 状态流转没有原子条件，可能被并发跳过或重复执行
+- 用户可控数据被不安全地渲染成 HTML，存在 XSS 风险
 
-#### Enum & Value Completeness
-When the diff introduces a new enum value, status string, tier name, or type constant:
-- **Trace it through every consumer.** Read (don't just grep — READ) each file that switches on, filters by, or displays that value. If any consumer doesn't handle the new value, flag it. Common miss: adding a value to the frontend dropdown but the backend model/compute method doesn't persist it.
-- **Check allowlists/filter arrays.** Search for arrays or `%w[]` lists containing sibling values (e.g., if adding "revise" to tiers, find every `%w[quick lfg mega]` and verify "revise" is included where needed).
-- **Check `case`/`if-elsif` chains.** If existing code branches on the enum, does the new value fall through to a wrong default?
-To do this: use Grep to find all references to the sibling values (e.g., grep for "lfg" or "mega" to find all tier consumers). Read each match. This step requires reading code OUTSIDE the diff.
+#### LLM 输出信任边界
 
-### Pass 2 — INFORMATIONAL
+- LLM 生成的邮箱、URL、名称等未做格式校验就写入数据库或下游服务
+- 工具输出的结构化数据未做类型或形状校验就被持久化
 
-#### Conditional Side Effects
-- Code paths that branch on a condition but forget to apply a side effect on one branch. Example: item promoted to verified but URL only attached when a secondary condition is true — the other branch promotes without the URL, creating an inconsistent record.
-- Log messages that claim an action happened but the action was conditionally skipped. The log should reflect what actually occurred.
+#### 枚举与取值完整性
 
-#### Magic Numbers & String Coupling
-- Bare numeric literals used in multiple files — should be named constants documented together
-- Error message strings used as query filters elsewhere (grep for the string — is anything matching on it?)
+当 diff 引入新的枚举值、状态字符串、等级名称或类型常量时：
 
-#### Dead Code & Consistency
-- Variables assigned but never read
-- Version mismatch between PR title and VERSION/CHANGELOG files
-- CHANGELOG entries that describe changes inaccurately (e.g., "changed from X to Y" when X never existed)
-- Comments/docstrings that describe old behavior after the code changed
+- 必须追踪所有消费者
+- 必须检查 allowlist / filter 数组
+- 必须检查 `case` / `if-elsif` 分支是否遗漏
 
-#### LLM Prompt Issues
-- 0-indexed lists in prompts (LLMs reliably return 1-indexed)
-- Prompt text listing available tools/capabilities that don't match what's actually wired up in the `tool_classes`/`tools` array
-- Word/token limits stated in multiple places that could drift
+这类检查通常要求你**读 diff 之外的代码**，不能只靠 grep。
 
-#### Test Gaps
-- Negative-path tests that assert type/status but not the side effects (URL attached? field populated? callback fired?)
-- Assertions on string content without checking format (e.g., asserting title present but not URL format)
-- `.expects(:something).never` missing when a code path should explicitly NOT call an external service
-- Security enforcement features (blocking, rate limiting, auth) without integration tests verifying the enforcement path works end-to-end
+### 第二轮：INFORMATIONAL
 
-#### Completeness Gaps
-- Shortcut implementations where the complete version would cost <30 minutes CC time (e.g., partial enum handling, incomplete error paths, missing edge cases that are straightforward to add)
-- Options presented with only human-team effort estimates — should show both human and CC+gstack time
-- Test coverage gaps where adding the missing tests is a "lake" not an "ocean" (e.g., missing negative-path tests, missing edge case tests that mirror happy-path structure)
-- Features implemented at 80-90% when 100% is achievable with modest additional code
+#### 条件分支副作用
 
-#### Crypto & Entropy
-- Truncation of data instead of hashing (last N chars instead of SHA-256) — less entropy, easier collisions
-- `rand()` / `Random.rand` for security-sensitive values — use `SecureRandom` instead
-- Non-constant-time comparisons (`==`) on secrets or tokens — vulnerable to timing attacks
+- 某个分支做了状态更新，但漏掉另一分支应同步执行的副作用
+- 日志声称动作发生了，但实际该动作被条件跳过
 
-#### Time Window Safety
-- Date-key lookups that assume "today" covers 24h — report at 8am PT only sees midnight→8am under today's key
-- Mismatched time windows between related features — one uses hourly buckets, another uses daily keys for the same data
+#### 魔法数字与字符串耦合
 
-#### Type Coercion at Boundaries
-- Values crossing Ruby→JSON→JS boundaries where type could change (numeric vs string) — hash/digest inputs must normalize types
-- Hash/digest inputs that don't call `.to_s` or equivalent before serialization — `{ cores: 8 }` vs `{ cores: "8" }` produce different hashes
+- 多处散落的裸数值应提升为命名常量
+- 错误消息字符串在别处被当查询条件或逻辑分支使用
 
-#### View/Frontend
-- Inline `<style>` blocks in partials (re-parsed every render)
-- O(n*m) lookups in views (`Array#find` in a loop instead of `index_by` hash)
-- Ruby-side `.select{}` filtering on DB results that could be a `WHERE` clause (unless intentionally avoiding leading-wildcard `LIKE`)
+#### 死代码与一致性
 
----
+- 变量赋值后从未读取
+- PR 标题与 `VERSION` / `CHANGELOG` 不一致
+- `CHANGELOG` 描述与真实变更不一致
+- 注释或文档字符串还在描述旧行为
 
-## Severity Classification
+#### LLM 提示问题
 
-```
-CRITICAL (highest severity):      INFORMATIONAL (lower severity):
-├─ SQL & Data Safety              ├─ Conditional Side Effects
-├─ Race Conditions & Concurrency  ├─ Magic Numbers & String Coupling
-├─ LLM Output Trust Boundary      ├─ Dead Code & Consistency
-└─ Enum & Value Completeness      ├─ LLM Prompt Issues
-                                   ├─ Test Gaps
-                                   ├─ Completeness Gaps
-                                   ├─ Crypto & Entropy
-                                   ├─ Time Window Safety
-                                   ├─ Type Coercion at Boundaries
-                                   └─ View/Frontend
+- 提示词里使用 0 起始列表
+- 提示词声称可用的工具和真实接入不一致
+- 多处声明 token/字数限制，容易漂移
 
-All findings are actioned via Fix-First Review. Severity determines
-presentation order and classification of AUTO-FIX vs ASK — critical
-findings lean toward ASK (they're riskier), informational findings
-lean toward AUTO-FIX (they're more mechanical).
-```
+#### 测试缺口
 
----
+- 只测了状态，不测副作用
+- 只断言字符串存在，不校验格式
+- 某路径本应不调用外部服务，却没写 `.never`
+- 安全功能没有端到端验证
 
-## Fix-First Heuristic
+#### 完整性缺口
 
-This heuristic is referenced by both `/review` and `/ship`. It determines whether
-the agent auto-fixes a finding or asks the user.
+- 明明 30 分钟内可补完，却只做了 80%-90%
+- 只给人工时间估算，没有给 CC+gstack 时间
+- 补齐缺失测试明明是“湖”，却被当成“海”
+- 错误路径、边界条件、枚举分支只做了部分实现
 
-```
-AUTO-FIX (agent fixes without asking):     ASK (needs human judgment):
-├─ Dead code / unused variables            ├─ Security (auth, XSS, injection)
-├─ N+1 queries (missing eager loading)      ├─ Race conditions
-├─ Stale comments contradicting code       ├─ Design decisions
-├─ Magic numbers → named constants         ├─ Large fixes (>20 lines)
-├─ Missing LLM output validation           ├─ Enum completeness
-├─ Version/path mismatches                 ├─ Removing functionality
-├─ Variables assigned but never read       └─ Anything changing user-visible
-└─ Inline styles, O(n*m) view lookups        behavior
+#### 加密与熵
+
+- 用截断代替哈希
+- 安全敏感值使用 `rand()` / `Random.rand`
+- 对密钥或 token 使用非常量时间比较
+
+#### 时间窗口安全
+
+- 误把“今天”当成完整 24 小时
+- 相关功能使用不一致的时间窗口
+
+#### 边界处的类型转换
+
+- 跨语言 / JSON 边界时类型可能漂移
+- 参与哈希的数据未做 `.to_s` 等标准化
+
+#### 视图 / 前端
+
+- partial 中内联 `<style>`
+- 视图中 O(n*m) 查找
+- 本该下推到数据库的过滤放在应用层做
+
+## 严重级别
+
+```text
+CRITICAL:
+- SQL 与数据安全
+- 竞态与并发
+- LLM 输出信任边界
+- 枚举与取值完整性
+
+INFORMATIONAL:
+- 条件分支副作用
+- 魔法数字与字符串耦合
+- 死代码与一致性
+- LLM 提示问题
+- 测试缺口
+- 完整性缺口
+- 加密与熵
+- 时间窗口安全
+- 边界处的类型转换
+- 视图 / 前端
 ```
 
-**Rule of thumb:** If the fix is mechanical and a senior engineer would apply it
-without discussion, it's AUTO-FIX. If reasonable engineers could disagree about
-the fix, it's ASK.
+严重级别决定展示顺序，也影响 AUTO-FIX 与 ASK 的倾向：critical 更偏向 ASK，informational 更偏向 AUTO-FIX。
 
-**Critical findings default toward ASK** (they're inherently riskier).
-**Informational findings default toward AUTO-FIX** (they're more mechanical).
+## Fix-First 启发式
 
----
+**AUTO-FIX：**
 
-## Suppressions — DO NOT flag these
+- 死代码 / 未使用变量
+- 缺失的 eager loading
+- 过时注释
+- 魔法数字提升为命名常量
+- 缺失的轻量级 LLM 输出校验
+- 版本 / 路径不一致
+- inline style、明显的视图性能问题
 
-- "X is redundant with Y" when the redundancy is harmless and aids readability (e.g., `present?` redundant with `length > 20`)
-- "Add a comment explaining why this threshold/constant was chosen" — thresholds change during tuning, comments rot
-- "This assertion could be tighter" when the assertion already covers the behavior
-- Suggesting consistency-only changes (wrapping a value in a conditional to match how another constant is guarded)
-- "Regex doesn't handle edge case X" when the input is constrained and X never occurs in practice
-- "Test exercises multiple guards simultaneously" — that's fine, tests don't need to isolate every guard
-- Eval threshold changes (max_actionable, min scores) — these are tuned empirically and change constantly
-- Harmless no-ops (e.g., `.reject` on an element that's never in the array)
-- ANYTHING already addressed in the diff you're reviewing — read the FULL diff before commenting
+**ASK：**
+
+- 安全问题
+- 竞态问题
+- 设计取舍
+- 超过 20 行的大修
+- 枚举完整性问题
+- 删除功能
+- 改变用户可见行为的改动
+
+经验规则：如果一个资深工程师会毫不犹豫直接改，那就是 AUTO-FIX；如果合理的人可能会分歧，就 ASK。
+
+## 抑制项：不要报告这些
+
+- 无害但有助于可读性的冗余
+- “应该加注释解释这个阈值”的建议
+- 已经足够覆盖行为的断言还能再收紧一点
+- 纯一致性但无实际收益的改法
+- 实际输入约束下不可能发生的正则边界问题
+- “一个测试同时覆盖了多个 guard”
+- 评测阈值类调参
+- 无害 no-op
+- **任何已经在当前 diff 里修掉的问题**

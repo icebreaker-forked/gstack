@@ -1,24 +1,24 @@
-# QA Report: {APP_NAME}
+# QA 报告：{APP_NAME}
 
-| Field | Value |
-|-------|-------|
-| **Date** | {DATE} |
+| 字段 | 值 |
+|------|----|
+| **日期** | {DATE} |
 | **URL** | {URL} |
-| **Branch** | {BRANCH} |
-| **Commit** | {COMMIT_SHA} ({COMMIT_DATE}) |
-| **PR** | {PR_NUMBER} ({PR_URL}) or "—" |
-| **Tier** | Quick / Standard / Exhaustive |
-| **Scope** | {SCOPE or "Full app"} |
-| **Duration** | {DURATION} |
-| **Pages visited** | {COUNT} |
-| **Screenshots** | {COUNT} |
-| **Framework** | {DETECTED or "Unknown"} |
-| **Index** | [All QA runs](./index.md) |
+| **分支** | {BRANCH} |
+| **提交** | {COMMIT_SHA} ({COMMIT_DATE}) |
+| **PR** | {PR_NUMBER} ({PR_URL}) 或 `—` |
+| **层级** | Quick / Standard / Exhaustive |
+| **范围** | {SCOPE or "Full app"} |
+| **耗时** | {DURATION} |
+| **访问页面数** | {COUNT} |
+| **截图数** | {COUNT} |
+| **框架** | {DETECTED or "Unknown"} |
+| **索引** | [所有 QA 运行记录](./index.md) |
 
-## Health Score: {SCORE}/100
+## 健康评分：{SCORE}/100
 
-| Category | Score |
-|----------|-------|
+| 类别 | 分数 |
+|------|------|
 | Console | {0-100} |
 | Links | {0-100} |
 | Visual | {0-100} |
@@ -27,100 +27,100 @@
 | Performance | {0-100} |
 | Accessibility | {0-100} |
 
-## Top 3 Things to Fix
+## 优先修复的 3 件事
 
 1. **{ISSUE-NNN}: {title}** — {one-line description}
 2. **{ISSUE-NNN}: {title}** — {one-line description}
 3. **{ISSUE-NNN}: {title}** — {one-line description}
 
-## Console Health
+## Console 健康状况
 
-| Error | Count | First seen |
-|-------|-------|------------|
+| 错误 | 次数 | 首次出现位置 |
+|------|------|--------------|
 | {error message} | {N} | {URL} |
 
-## Summary
+## 汇总
 
-| Severity | Count |
-|----------|-------|
+| 严重级别 | 数量 |
+|----------|------|
 | Critical | 0 |
 | High | 0 |
 | Medium | 0 |
 | Low | 0 |
-| **Total** | **0** |
+| **总计** | **0** |
 
-## Issues
+## 问题列表
 
 ### ISSUE-001: {Short title}
 
-| Field | Value |
-|-------|-------|
-| **Severity** | critical / high / medium / low |
-| **Category** | visual / functional / ux / content / performance / console / accessibility |
+| 字段 | 值 |
+|------|----|
+| **严重级别** | critical / high / medium / low |
+| **分类** | visual / functional / ux / content / performance / console / accessibility |
 | **URL** | {page URL} |
 
-**Description:** {What is wrong, expected vs actual.}
+**问题描述：** {What is wrong, expected vs actual.}
 
-**Repro Steps:**
+**复现步骤：**
 
-1. Navigate to {URL}
+1. 打开 {URL}
    ![Step 1](screenshots/issue-001-step-1.png)
 2. {Action}
    ![Step 2](screenshots/issue-001-step-2.png)
-3. **Observe:** {what goes wrong}
+3. **观察到：** {what goes wrong}
    ![Result](screenshots/issue-001-result.png)
 
 ---
 
-## Fixes Applied (if applicable)
+## 已应用修复（如适用）
 
-| Issue | Fix Status | Commit | Files Changed |
-|-------|-----------|--------|---------------|
+| 问题 | 修复状态 | 提交 | 修改文件 |
+|------|----------|------|----------|
 | ISSUE-NNN | verified / best-effort / reverted / deferred | {SHA} | {files} |
 
-### Before/After Evidence
+### 修复前后证据
 
 #### ISSUE-NNN: {title}
-**Before:** ![Before](screenshots/issue-NNN-before.png)
-**After:** ![After](screenshots/issue-NNN-after.png)
+**修复前：** ![Before](screenshots/issue-NNN-before.png)
+**修复后：** ![After](screenshots/issue-NNN-after.png)
 
 ---
 
-## Regression Tests
+## 回归测试
 
-| Issue | Test File | Status | Description |
-|-------|-----------|--------|-------------|
+| 问题 | 测试文件 | 状态 | 说明 |
+|------|----------|------|------|
 | ISSUE-NNN | path/to/test | committed / deferred / skipped | description |
 
-### Deferred Tests
+### 延后补充的测试
 
 #### ISSUE-NNN: {title}
-**Precondition:** {setup state that triggers the bug}
-**Action:** {what the user does}
-**Expected:** {correct behavior}
-**Why deferred:** {reason}
+**前置条件：** {setup state that triggers the bug}  
+**操作：** {what the user does}  
+**期望：** {correct behavior}  
+**为何延后：** {reason}
 
 ---
 
-## Ship Readiness
+## 发版就绪度
 
-| Metric | Value |
-|--------|-------|
-| Health score | {before} → {after} ({delta}) |
-| Issues found | N |
-| Fixes applied | N (verified: X, best-effort: Y, reverted: Z) |
-| Deferred | N |
+| 指标 | 值 |
+|------|----|
+| 健康分 | {before} → {after} ({delta}) |
+| 发现问题 | N |
+| 已修复 | N（verified: X，best-effort: Y，reverted: Z） |
+| 延后项 | N |
 
-**PR Summary:** "QA found N issues, fixed M, health score X → Y."
+**PR 摘要：** `QA found N issues, fixed M, health score X → Y.`
 
 ---
 
-## Regression (if applicable)
+## 回归对比（如适用）
 
-| Metric | Baseline | Current | Delta |
-|--------|----------|---------|-------|
-| Health score | {N} | {N} | {+/-N} |
-| Issues | {N} | {N} | {+/-N} |
+| 指标 | 基线 | 当前 | Delta |
+|------|------|------|-------|
+| 健康分 | {N} | {N} | {+/-N} |
+| 问题数 | {N} | {N} | {+/-N} |
 
-**Fixed since baseline:** {list}
-**New since baseline:** {list}
+**相对基线已修复：** {list}  
+**相对基线新增：** {list}
