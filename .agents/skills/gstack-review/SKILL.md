@@ -1,10 +1,10 @@
 ---
 name: review
 description: |
-  Pre-landing PR review. Analyzes diff against the base branch for SQL safety, LLM trust
-  boundary violations, conditional side effects, and other structural issues. Use when
-  asked to "review this PR", "code review", "pre-landing review", or "check my diff".
-  Proactively suggest when the user is about to merge or land code changes.
+  合并前 PR 评审。它会针对与基线分支的 diff，检查 SQL 安全、LLM 信任边界、
+  条件副作用及其他结构性问题。当用户说 “review this PR”、“code review”、
+  “pre-landing review” 或 “check my diff” 时使用。
+  当用户准备合并或落地代码改动时，应主动建议。
 ---
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
@@ -222,40 +222,39 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 
 # Pre-Landing PR Review
 
-You are running the `/review` workflow. Analyze the current branch's diff against the base branch for structural issues that tests don't catch.
+你正在执行 `/review` 工作流。请对当前分支相对于基线分支的 diff 做分析，重点寻找那些测试未必能捕捉到的结构性问题。
 
 ---
 
-## Step 1: Check branch
+## Step 1：检查分支
 
-1. Run `git branch --show-current` to get the current branch.
-2. If on the base branch, output: **"Nothing to review — you're on the base branch or have no changes against it."** and stop.
-3. Run `git fetch origin <base> --quiet && git diff origin/<base> --stat` to check if there's a diff. If no diff, output the same message and stop.
+1. 运行 `git branch --show-current` 获取当前分支名。
+2. 如果当前就在基线分支上，输出：**"Nothing to review — you're on the base branch or have no changes against it."** 然后停止。
+3. 运行 `git fetch origin <base> --quiet && git diff origin/<base> --stat` 检查是否存在 diff。如果没有 diff，也输出同样的话并停止。
 
 ---
 
-## Step 1.5: Scope Drift Detection
+## Step 1.5：范围漂移检测
 
-Before reviewing code quality, check: **did they build what was requested — nothing more, nothing less?**
+在审代码质量之前，先检查：**这次实现做的是否正是被要求做的事，不多也不少？**
 
-1. Read `TODOS.md` (if it exists). Read PR description (`gh pr view --json body --jq .body 2>/dev/null || true`).
-   Read commit messages (`git log origin/<base>..HEAD --oneline`).
-   **If no PR exists:** rely on commit messages and TODOS.md for stated intent — this is the common case since /review runs before /ship creates the PR.
-2. Identify the **stated intent** — what was this branch supposed to accomplish?
-3. Run `git diff origin/<base> --stat` and compare the files changed against the stated intent.
-4. Evaluate with skepticism:
+1. 读取 `TODOS.md`（如果存在）、PR 描述（`gh pr view --json body --jq .body 2>/dev/null || true`）以及 commit message（`git log origin/<base>..HEAD --oneline`）。
+   **如果还没有 PR：** 就依赖 commit message 和 `TODOS.md` 判断此次改动的显式意图。这是常见情况，因为 `/review` 通常在 `/ship` 创建 PR 之前运行。
+2. 识别这次分支的**显式目标**是什么。
+3. 运行 `git diff origin/<base> --stat`，把变更文件与显式目标逐一比对。
+4. 带着怀疑去判断：
 
-   **SCOPE CREEP detection:**
-   - Files changed that are unrelated to the stated intent
-   - New features or refactors not mentioned in the plan
-   - "While I was in there..." changes that expand blast radius
+   **SCOPE CREEP 检测：**
+   - 改动了与既定目标无关的文件
+   - 引入了计划中未提到的新功能或重构
+   - 典型的“顺手改了点别的”式扩张，扩大了 blast radius
 
-   **MISSING REQUIREMENTS detection:**
-   - Requirements from TODOS.md/PR description not addressed in the diff
-   - Test coverage gaps for stated requirements
-   - Partial implementations (started but not finished)
+   **MISSING REQUIREMENTS 检测：**
+   - `TODOS.md` / PR 描述里提到的要求，在 diff 中没有体现
+   - 已声明需求对应的测试覆盖缺口
+   - 做了一半但没做完的实现
 
-5. Output (before the main review begins):
+5. 在正式评审开始前，先输出：
    ```
    Scope Check: [CLEAN / DRIFT DETECTED / REQUIREMENTS MISSING]
    Intent: <1-line summary of what was requested>
@@ -264,54 +263,54 @@ Before reviewing code quality, check: **did they build what was requested — no
    [If missing: list each unaddressed requirement]
    ```
 
-6. This is **INFORMATIONAL** — does not block the review. Proceed to Step 2.
+6. 这一节属于 **INFORMATIONAL**，不阻塞后续评审。之后继续 Step 2。
 
 ---
 
-## Step 2: Read the checklist
+## Step 2：读取 checklist
 
-Read `.agents/skills/gstack/review/checklist.md`.
+读取 `.agents/skills/gstack/review/checklist.md`。
 
-**If the file cannot be read, STOP and report the error.** Do not proceed without the checklist.
-
----
-
-## Step 2.5: Check for Greptile review comments
-
-Read `.agents/skills/gstack/review/greptile-triage.md` and follow the fetch, filter, classify, and **escalation detection** steps.
-
-**If no PR exists, `gh` fails, API returns an error, or there are zero Greptile comments:** Skip this step silently. Greptile integration is additive — the review works without it.
-
-**If Greptile comments are found:** Store the classifications (VALID & ACTIONABLE, VALID BUT ALREADY FIXED, FALSE POSITIVE, SUPPRESSED) — you will need them in Step 5.
+**如果读不到这个文件，就停止并报告错误。** 没有 checklist 就不要继续。
 
 ---
 
-## Step 3: Get the diff
+## Step 2.5：检查 Greptile review comments
 
-Fetch the latest base branch to avoid false positives from stale local state:
+读取 `.agents/skills/gstack/review/greptile-triage.md`，按其中的抓取、过滤、分类以及 **escalation detection** 步骤执行。
+
+**如果没有 PR、`gh` 失败、API 返回错误，或 Greptile 评论数为 0：** 静默跳过。Greptile 是增强项，不应阻塞 review。
+
+**如果找到了 Greptile 评论：** 保存它们的分类结果（VALID & ACTIONABLE、VALID BUT ALREADY FIXED、FALSE POSITIVE、SUPPRESSED），Step 5 会用到。
+
+---
+
+## Step 3：获取 diff
+
+先拉取最新基线分支，避免因为本地状态陈旧产生误报：
 
 ```bash
 git fetch origin <base> --quiet
 ```
 
-Run `git diff origin/<base>` to get the full diff. This includes both committed and uncommitted changes against the latest base branch.
+运行 `git diff origin/<base>` 获取完整 diff。这里应包含当前分支相对于最新基线分支的所有已提交和未提交改动。
 
 ---
 
-## Step 4: Two-pass review
+## Step 4：两轮评审
 
-Apply the checklist against the diff in two passes:
+按 checklist 分两轮检查 diff：
 
 1. **Pass 1 (CRITICAL):** SQL & Data Safety, Race Conditions & Concurrency, LLM Output Trust Boundary, Enum & Value Completeness
 2. **Pass 2 (INFORMATIONAL):** Conditional Side Effects, Magic Numbers & String Coupling, Dead Code & Consistency, LLM Prompt Issues, Test Gaps, View/Frontend
 
-**Enum & Value Completeness requires reading code OUTSIDE the diff.** When the diff introduces a new enum value, status, tier, or type constant, use Grep to find all files that reference sibling values, then Read those files to check if the new value is handled. This is the one category where within-diff review is insufficient.
+**Enum & Value Completeness 必须读 diff 之外的代码。** 一旦 diff 引入新的枚举值、状态值、tier 或 type 常量，就要用 Grep 找到所有引用其同类值的文件，再逐个 Read 检查新值是否被处理到位。这是少数仅靠 diff 本身不够的类别。
 
-Follow the output format specified in the checklist. Respect the suppressions — do NOT flag items listed in the "DO NOT flag" section.
+输出格式严格遵守 checklist。尊重 suppressions，凡是在 “DO NOT flag” 中列出的项，一律不要报。
 
 ---
 
-## Step 4.5: Design Review (conditional)
+## Step 4.5：设计评审（按需）
 
 ## Design Review (conditional, diff-scoped)
 
@@ -346,34 +345,32 @@ source <(~/.codex/skills/gstack/bin/gstack-diff-scope <base> 2>/dev/null)
 
 Substitute: TIMESTAMP = ISO 8601 datetime, STATUS = "clean" if 0 findings or "issues_found", N = total findings, M = auto-fixed count, COMMIT = output of `git rev-parse --short HEAD`.
 
-Include any design findings alongside the findings from Step 4. They follow the same Fix-First flow in Step 5 — AUTO-FIX for mechanical CSS fixes, ASK for everything else.
+把设计类发现和 Step 4 的发现一起输出。它们同样遵循 Step 5 的 Fix-First 流程：纯机械 CSS 修复走 AUTO-FIX，其余走 ASK。
 
 ---
 
-## Step 5: Fix-First Review
+## Step 5：Fix-First Review
 
-**Every finding gets action — not just critical ones.**
+**每一个发现都必须有动作，不只是 critical。**
 
-Output a summary header: `Pre-Landing Review: N issues (X critical, Y informational)`
+先输出一个汇总头：`Pre-Landing Review: N issues (X critical, Y informational)`
 
-### Step 5a: Classify each finding
+### Step 5a：给每个发现分类
 
-For each finding, classify as AUTO-FIX or ASK per the Fix-First Heuristic in
-checklist.md. Critical findings lean toward ASK; informational findings lean
-toward AUTO-FIX.
+每个发现都要按照 checklist 中的 Fix-First Heuristic 分到 AUTO-FIX 或 ASK。Critical 更偏向 ASK；informational 更偏向 AUTO-FIX。
 
-### Step 5b: Auto-fix all AUTO-FIX items
+### Step 5b：自动修掉所有 AUTO-FIX 项
 
-Apply each fix directly. For each one, output a one-line summary:
+对每个 AUTO-FIX 项直接实施修复，并逐条输出一行总结：
 `[AUTO-FIXED] [file:line] Problem → what you did`
 
-### Step 5c: Batch-ask about ASK items
+### Step 5c：把 ASK 项集中提问
 
-If there are ASK items remaining, present them in ONE AskUserQuestion:
+如果还有 ASK 项，把它们合并成 **一个** AskUserQuestion：
 
-- List each item with a number, the severity label, the problem, and a recommended fix
-- For each item, provide options: A) Fix as recommended, B) Skip
-- Include an overall RECOMMENDATION
+- 每个问题都写清楚编号、严重级别、问题本身，以及推荐修法
+- 每个问题都提供选项：A) 按推荐修复，B) 跳过
+- 最后给出一个总体 RECOMMENDATION
 
 Example format:
 ```
@@ -390,31 +387,31 @@ I auto-fixed 5 issues. 2 need your input:
 RECOMMENDATION: Fix both — #1 is a real race condition, #2 prevents silent data corruption.
 ```
 
-If 3 or fewer ASK items, you may use individual AskUserQuestion calls instead of batching.
+如果 ASK 项不超过 3 个，也可以拆成单独 AskUserQuestion。
 
-### Step 5d: Apply user-approved fixes
+### Step 5d：应用用户批准的修复
 
-Apply fixes for items where the user chose "Fix." Output what was fixed.
+对于用户选择 “Fix” 的项，直接实施修复，并输出实际修了什么。
 
-If no ASK items exist (everything was AUTO-FIX), skip the question entirely.
+如果不存在 ASK 项（即全部都是 AUTO-FIX），则完全跳过提问。
 
-### Verification of claims
+### 结论验证
 
-Before producing the final review output:
-- If you claim "this pattern is safe" → cite the specific line proving safety
-- If you claim "this is handled elsewhere" → read and cite the handling code
-- If you claim "tests cover this" → name the test file and method
-- Never say "likely handled" or "probably tested" — verify or flag as unknown
+在给出最终 review 结论前：
+- 如果你说“这种写法是安全的” → 必须引用能证明其安全的具体行
+- 如果你说“这在别处已经处理了” → 必须读到那段处理逻辑并引用它
+- 如果你说“测试覆盖到了” → 必须写出测试文件与测试方法
+- 不允许说 “likely handled” 或 “probably tested”，要么验证，要么明确标成未知
 
-**Rationalization prevention:** "This looks fine" is not a finding. Either cite evidence it IS fine, or flag it as unverified.
+**禁止自我合理化：** “This looks fine” 不算结论。你要么给出它确实没问题的证据，要么把它标成未验证。
 
-### Greptile comment resolution
+### Greptile 评论处置
 
-After outputting your own findings, if Greptile comments were classified in Step 2.5:
+在输出完你自己的发现之后，如果 Step 2.5 中存在已分类的 Greptile 评论：
 
-**Include a Greptile summary in your output header:** `+ N Greptile comments (X valid, Y fixed, Z FP)`
+**在输出头部追加 Greptile 摘要：** `+ N Greptile comments (X valid, Y fixed, Z FP)`
 
-Before replying to any comment, run the **Escalation Detection** algorithm from greptile-triage.md to determine whether to use Tier 1 (friendly) or Tier 2 (firm) reply templates.
+在回复任何评论前，先执行 `greptile-triage.md` 中的 **Escalation Detection** 算法，判断应该用 Tier 1（友好）还是 Tier 2（更强硬）的回复模板。
 
 1. **VALID & ACTIONABLE comments:** These are included in your findings — they follow the Fix-First flow (auto-fixed if mechanical, batched into ASK if not) (A: Fix it now, B: Acknowledge, C: False positive). If the user chooses A (fix), reply using the **Fix reply template** from greptile-triage.md (include inline diff + explanation). If the user chooses C (false positive), reply using the **False Positive reply template** (include evidence + suggested re-rank), save to both per-project and global greptile-history.
 
@@ -436,41 +433,41 @@ Before replying to any comment, run the **Escalation Detection** algorithm from 
 
 ---
 
-## Step 5.5: TODOS cross-reference
+## Step 5.5：交叉检查 TODOS
 
-Read `TODOS.md` in the repository root (if it exists). Cross-reference the PR against open TODOs:
+读取仓库根目录的 `TODOS.md`（如果存在），并把当前 PR 与未完成 TODO 做交叉检查：
 
-- **Does this PR close any open TODOs?** If yes, note which items in your output: "This PR addresses TODO: <title>"
-- **Does this PR create work that should become a TODO?** If yes, flag it as an informational finding.
-- **Are there related TODOs that provide context for this review?** If yes, reference them when discussing related findings.
+- **这个 PR 是否关闭了现有 TODO？** 如果是，在输出中写清楚：“This PR addresses TODO: <title>”
+- **这个 PR 是否衍生出应该写进 TODO 的后续工作？** 如果是，把它作为 informational finding 标出来。
+- **是否存在与这次 review 高度相关的 TODO，可作为上下文？** 如果有，在讨论相关发现时引用。
 
-If TODOS.md doesn't exist, skip this step silently.
-
----
-
-## Step 5.6: Documentation staleness check
-
-Cross-reference the diff against documentation files. For each `.md` file in the repo root (README.md, ARCHITECTURE.md, CONTRIBUTING.md, CLAUDE.md, etc.):
-
-1. Check if code changes in the diff affect features, components, or workflows described in that doc file.
-2. If the doc file was NOT updated in this branch but the code it describes WAS changed, flag it as an INFORMATIONAL finding:
-   "Documentation may be stale: [file] describes [feature/component] but code changed in this branch. Consider running `/document-release`."
-
-This is informational only — never critical. The fix action is `/document-release`.
-
-If no documentation files exist, skip this step silently.
+如果没有 `TODOS.md`，则静默跳过。
 
 ---
 
-## Step 5.7: Codex second opinion (optional)
+## Step 5.6：文档陈旧性检查
 
-After completing the review, check if the Codex CLI is available:
+把 diff 与文档文件交叉比对。对仓库根目录中的每个 `.md` 文件（如 `README.md`、`ARCHITECTURE.md`、`CONTRIBUTING.md`、`CLAUDE.md` 等）：
+
+1. 检查 diff 中的代码改动是否影响了该文档描述的功能、组件或工作流。
+2. 如果文档本身在当前分支**没有更新**，但它描述的代码**发生了变化**，就把它报成 INFORMATIONAL finding：
+   `"Documentation may be stale: [file] describes [feature/component] but code changed in this branch. Consider running /document-release."`
+
+这一类问题永远只算 informational，不算 critical。对应修复动作是 `/document-release`。
+
+如果没有相关文档文件，就静默跳过。
+
+---
+
+## Step 5.7：Codex 第二意见（可选）
+
+完成 review 后，检查本机是否可用 Codex CLI：
 
 ```bash
 which codex 2>/dev/null && echo "CODEX_AVAILABLE" || echo "CODEX_NOT_AVAILABLE"
 ```
 
-If Codex is available, use AskUserQuestion:
+如果 Codex 可用，则通过 AskUserQuestion 询问：
 
 ```
 Review complete. Want an independent second opinion from Codex (OpenAI)?
@@ -481,40 +478,36 @@ C) Both — review first, then adversarial challenge
 D) Skip — no Codex review needed
 ```
 
-If the user chooses A, B, or C:
+如果用户选择 A、B 或 C：
 
-**For code review (A or C):** Run `codex review --base <base>` with a 5-minute timeout.
-Present the full output verbatim under a `CODEX SAYS (code review):` header.
-Check the output for `[P1]` markers — if found, note `GATE: FAIL`, otherwise `GATE: PASS`.
-After presenting, compare Codex's findings with your own review findings from Steps 4-5
-and output a CROSS-MODEL ANALYSIS showing what both found, what only Codex found,
-and what only Claude found.
+**对于 code review（A 或 C）：** 运行 `codex review --base <base>`，超时设为 5 分钟。
+将完整输出原样放在 `CODEX SAYS (code review):` 标题下。
+检查输出中是否存在 `[P1]` 标记；如果有，就记为 `GATE: FAIL`，否则记为 `GATE: PASS`。
+展示完之后，再把 Codex 的发现与 Steps 4-5 中你自己的发现做对照，输出一段 CROSS-MODEL ANALYSIS，说明双方都发现了什么、只有 Codex 发现了什么、只有 Claude 发现了什么。
 
-**For adversarial challenge (B or C):** Run:
+**对于 adversarial challenge（B 或 C）：** 运行：
 ```bash
 codex exec "Review the changes on this branch against the base branch. Run git diff origin/<base> to see the diff. Your job is to find ways this code will fail in production. Think like an attacker and a chaos engineer. Find edge cases, race conditions, security holes, failure modes. Be adversarial." -s read-only
 ```
-Present the full output verbatim under a `CODEX SAYS (adversarial challenge):` header.
+将完整输出原样放在 `CODEX SAYS (adversarial challenge):` 标题下。
 
-**Only if a code review ran (user chose A or C):** Persist the Codex review result to the review log:
+**只有在 code review 实际运行过时（用户选择了 A 或 C）：** 才把 Codex review 结果写进 review log：
 ```bash
 ~/.codex/skills/gstack/bin/gstack-review-log '{"skill":"codex-review","timestamp":"'"$(date -u +%Y-%m-%dT%H:%M:%SZ)"'","status":"STATUS","gate":"GATE"}'
 ```
 
-Substitute: STATUS ("clean" if PASS, "issues_found" if FAIL), GATE ("pass" or "fail").
+替换参数时：STATUS 使用 `"clean"`（若 PASS）或 `"issues_found"`（若 FAIL）；GATE 使用 `"pass"` 或 `"fail"`。
 
-**Do NOT persist a codex-review entry when only the adversarial challenge (B) ran** —
-there is no gate verdict to record, and a false entry would make the Review Readiness
-Dashboard believe a code review happened when it didn't.
+**如果只运行了 adversarial challenge（B），绝对不要写 codex-review 日志。** 因为这时没有 gate 结论；写入错误记录会让 Review Readiness Dashboard 误以为 code review 已经做过。
 
-If Codex is not available, skip this step silently.
+如果 Codex 不可用，则静默跳过此步骤。
 
 ---
 
-## Important Rules
+## 重要规则
 
-- **Read the FULL diff before commenting.** Do not flag issues already addressed in the diff.
-- **Fix-first, not read-only.** AUTO-FIX items are applied directly. ASK items are only applied after user approval. Never commit, push, or create PRs — that's /ship's job.
-- **Be terse.** One line problem, one line fix. No preamble.
-- **Only flag real problems.** Skip anything that's fine.
-- **Use Greptile reply templates from greptile-triage.md.** Every reply includes evidence. Never post vague replies.
+- **在发表评论前先读完整 diff。** 已经在 diff 里修掉的问题不要再报。
+- **Fix-first，而不是只读旁观。** AUTO-FIX 直接修，ASK 只有在用户批准后才修。不要 commit、push 或创建 PR，那是 `/ship` 的职责。
+- **保持简洁。** 一行问题，一行修法，不要写前言。
+- **只报告真实问题。** 没问题的内容直接跳过。
+- **Greptile 回复必须使用 `greptile-triage.md` 里的模板。** 每条回复都要有证据，不能含糊其辞。

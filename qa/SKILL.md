@@ -2,14 +2,14 @@
 name: qa
 version: 2.0.0
 description: |
-  Systematically QA test a web application and fix bugs found. Runs QA testing,
-  then iteratively fixes bugs in source code, committing each fix atomically and
-  re-verifying. Use when asked to "qa", "QA", "test this site", "find bugs",
-  "test and fix", or "fix what's broken".
-  Proactively suggest when the user says a feature is ready for testing
-  or asks "does this work?". Three tiers: Quick (critical/high only),
-  Standard (+ medium), Exhaustive (+ cosmetic). Produces before/after health scores,
-  fix evidence, and a ship-readiness summary. For report-only mode, use /qa-only.
+  系统化地对 web 应用做 QA 测试，并修复发现的问题。流程是：
+  先测试，再在源码中迭代修 bug，每个修复单独提交，再重新验证。
+  当用户说 “qa”、“QA”、“test this site”、“find bugs”、
+  “test and fix” 或 “fix what's broken” 时使用。
+  当用户表示某个功能已经准备好接受测试，或直接问 “does this work?” 时，
+  应主动建议。支持三档：Quick（只修 critical / high）、Standard（再加 medium）、
+  Exhaustive（连 low / cosmetic 一起处理）。最终输出前后健康分、
+  修复证据与是否可发版的总结。若只需要报告，不要修，请用 /qa-only。
 allowed-tools:
   - Bash
   - Read
@@ -236,47 +236,47 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
 
 # /qa: Test → Fix → Verify
 
-You are a QA engineer AND a bug-fix engineer. Test web applications like a real user — click everything, fill every form, check every state. When you find bugs, fix them in source code with atomic commits, then re-verify. Produce a structured report with before/after evidence.
+你既是 QA 工程师，也是 bug 修复工程师。要像真实用户一样测试 web 应用：到处点、填每个表单、检查每种状态。发现 bug 后，在源码里用原子提交修复，再重新验证，并产出一份带前后证据的结构化报告。
 
-## Setup
+## 设置
 
-**Parse the user's request for these parameters:**
+**先从用户请求中解析这些参数：**
 
-| Parameter | Default | Override example |
-|-----------|---------|-----------------:|
-| Target URL | (auto-detect or required) | `https://myapp.com`, `http://localhost:3000` |
-| Tier | Standard | `--quick`, `--exhaustive` |
+| 参数 | 默认值 | 覆盖示例 |
+|------|--------|---------:|
+| Target URL | 自动检测或必填 | `https://myapp.com`、`http://localhost:3000` |
+| Tier | Standard | `--quick`、`--exhaustive` |
 | Mode | full | `--regression .gstack/qa-reports/baseline.json` |
 | Output dir | `.gstack/qa-reports/` | `Output to /tmp/qa` |
-| Scope | Full app (or diff-scoped) | `Focus on the billing page` |
-| Auth | None | `Sign in to user@example.com`, `Import cookies from cookies.json` |
+| Scope | 整个应用（或按 diff 聚焦） | `Focus on the billing page` |
+| Auth | None | `Sign in to user@example.com`、`Import cookies from cookies.json` |
 
-**Tiers determine which issues get fixed:**
-- **Quick:** Fix critical + high severity only
-- **Standard:** + medium severity (default)
-- **Exhaustive:** + low/cosmetic severity
+**不同 Tier 决定你会修到什么程度：**
+- **Quick：** 只修 critical + high
+- **Standard：** 再加 medium（默认）
+- **Exhaustive：** 连 low / cosmetic 一起修
 
-**If no URL is given and you're on a feature branch:** Automatically enter **diff-aware mode** (see Modes below). This is the most common case — the user just shipped code on a branch and wants to verify it works.
+**如果用户没给 URL，且当前在 feature branch 上：** 自动进入 **diff-aware mode**（见后面的 Modes）。这是最常见场景：用户刚在一个分支上交付了代码，现在想确认它真的能工作。
 
-**Check for clean working tree:**
+**先检查工作树是否干净：**
 
 ```bash
 git status --porcelain
 ```
 
-If the output is non-empty (working tree is dirty), **STOP** and use AskUserQuestion:
+如果输出非空（工作树不干净），就**停止**并用 AskUserQuestion 提问：
 
-"Your working tree has uncommitted changes. /qa needs a clean tree so each bug fix gets its own atomic commit."
+“Your working tree has uncommitted changes. /qa needs a clean tree so each bug fix gets its own atomic commit.”
 
 - A) Commit my changes — commit all current changes with a descriptive message, then start QA
 - B) Stash my changes — stash, run QA, pop the stash after
 - C) Abort — I'll clean up manually
 
-RECOMMENDATION: Choose A because uncommitted work should be preserved as a commit before QA adds its own fix commits.
+RECOMMENDATION：优先选 A，因为在 QA 生成自己的修复提交之前，当前未提交工作应先被安全保存为 commit。
 
-After the user chooses, execute their choice (commit or stash), then continue with setup.
+用户做出选择后，执行对应动作（commit 或 stash），再继续 setup。
 
-**Find the browse binary:**
+**找到 browse 二进制：**
 
 ## SETUP（在任何 browse 命令之前先执行此检查）
 
@@ -297,7 +297,7 @@ fi
 2. Run: `cd <SKILL_DIR> && ./setup`
 3. 如果未安装 `bun`：执行 `curl -fsSL https://bun.sh/install | bash`
 
-**Check test framework (bootstrap if needed):**
+**检查测试框架（如有必要则引导 bootstrap）：**
 
 ## Test Framework Bootstrap
 
@@ -452,7 +452,7 @@ Only commit if there are changes. Stage all bootstrap files (config, test direct
 
 ---
 
-**Create output directories:**
+**创建输出目录：**
 
 ```bash
 mkdir -p .gstack/qa-reports/screenshots
@@ -460,21 +460,21 @@ mkdir -p .gstack/qa-reports/screenshots
 
 ---
 
-## Test Plan Context
+## 测试计划上下文
 
-Before falling back to git diff heuristics, check for richer test plan sources:
+在回退到 git diff 启发式之前，先检查是否存在更丰富的测试计划来源：
 
-1. **Project-scoped test plans:** Check `~/.gstack/projects/` for recent `*-test-plan-*.md` files for this repo
+1. **项目级测试计划：** 检查 `~/.gstack/projects/` 下这个仓库最近的 `*-test-plan-*.md`
    ```bash
    source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)
    ls -t ~/.gstack/projects/$SLUG/*-test-plan-*.md 2>/dev/null | head -1
    ```
-2. **Conversation context:** Check if a prior `/plan-eng-review` or `/plan-ceo-review` produced test plan output in this conversation
-3. **Use whichever source is richer.** Fall back to git diff analysis only if neither is available.
+2. **当前会话上下文：** 看这段对话里之前是否已经有 `/plan-eng-review` 或 `/plan-ceo-review` 产出的测试计划
+3. **优先使用信息量更大的来源。** 只有在两者都没有时，才回退到 git diff 分析。
 
 ---
 
-## Phases 1-6: QA Baseline
+## Phase 1-6：QA 基线
 
 ## Modes
 
@@ -754,11 +754,11 @@ Minimum 0 per category.
 11. **Show screenshots to the user.** After every `$B screenshot`, `$B snapshot -a -o`, or `$B responsive` command, use the Read tool on the output file(s) so the user can see them inline. For `responsive` (3 files), Read all three. This is critical — without it, screenshots are invisible to the user.
 12. **Never refuse to use the browser.** When the user invokes /qa or /qa-only, they are requesting browser-based testing. Never suggest evals, unit tests, or other alternatives as a substitute. Even if the diff appears to have no UI changes, backend changes affect app behavior — always open the browser and test.
 
-Record baseline health score at end of Phase 6.
+在 Phase 6 结束时记录 baseline health score。
 
 ---
 
-## Output Structure
+## 输出结构
 
 ```
 .gstack/qa-reports/
@@ -773,58 +773,58 @@ Record baseline health score at end of Phase 6.
 └── baseline.json                          # For regression mode
 ```
 
-Report filenames use the domain and date: `qa-report-myapp-com-2026-03-12.md`
+报告文件名使用域名和日期，例如：`qa-report-myapp-com-2026-03-12.md`
 
 ---
 
-## Phase 7: Triage
+## Phase 7：问题分流
 
-Sort all discovered issues by severity, then decide which to fix based on the selected tier:
+把所有发现的问题按严重级别排序，再根据所选 tier 决定修哪些：
 
-- **Quick:** Fix critical + high only. Mark medium/low as "deferred."
-- **Standard:** Fix critical + high + medium. Mark low as "deferred."
-- **Exhaustive:** Fix all, including cosmetic/low severity.
+- **Quick：** 只修 critical + high；medium / low 标成 `deferred`
+- **Standard：** 修 critical + high + medium；low 标成 `deferred`
+- **Exhaustive：** 全部修，包括 cosmetic / low
 
-Mark issues that cannot be fixed from source code (e.g., third-party widget bugs, infrastructure issues) as "deferred" regardless of tier.
+凡是无法从源码层修复的问题（例如第三方 widget bug、基础设施问题），无论 tier 如何，都统一标成 `deferred`。
 
 ---
 
-## Phase 8: Fix Loop
+## Phase 8：修复循环
 
-For each fixable issue, in severity order:
+对每个可修问题，按严重级别从高到低处理：
 
-### 8a. Locate source
+### 8a. 定位源码
 
 ```bash
 # Grep for error messages, component names, route definitions
 # Glob for file patterns matching the affected page
 ```
 
-- Find the source file(s) responsible for the bug
-- ONLY modify files directly related to the issue
+- 找到导致 bug 的源码文件
+- **只能修改与该问题直接相关的文件**
 
-### 8b. Fix
+### 8b. 修复
 
-- Read the source code, understand the context
-- Make the **minimal fix** — smallest change that resolves the issue
-- Do NOT refactor surrounding code, add features, or "improve" unrelated things
+- 先读源码并理解上下文
+- 只做**最小修复**，即能解决问题的最小改动
+- 不要顺手重构周边代码、加功能或“顺便优化”无关部分
 
-### 8c. Commit
+### 8c. 提交
 
 ```bash
 git add <only-changed-files>
 git commit -m "fix(qa): ISSUE-NNN — short description"
 ```
 
-- One commit per fix. Never bundle multiple fixes.
-- Message format: `fix(qa): ISSUE-NNN — short description`
+- 每个 fix 单独一个 commit，绝不能把多个修复揉进同一提交
+- commit message 格式固定为：`fix(qa): ISSUE-NNN — short description`
 
-### 8d. Re-test
+### 8d. 复测
 
-- Navigate back to the affected page
-- Take **before/after screenshot pair**
-- Check console for errors
-- Use `snapshot -D` to verify the change had the expected effect
+- 回到受影响页面
+- 截取一组**前后对照截图**
+- 检查 console 是否有错误
+- 用 `snapshot -D` 验证改动是否产生了预期效果
 
 ```bash
 $B goto <affected-url>
@@ -833,68 +833,73 @@ $B console --errors
 $B snapshot -D
 ```
 
-### 8e. Classify
+### 8e. 归类
 
-- **verified**: re-test confirms the fix works, no new errors introduced
-- **best-effort**: fix applied but couldn't fully verify (e.g., needs auth state, external service)
-- **reverted**: regression detected → `git revert HEAD` → mark issue as "deferred"
+- **verified**：复测确认修复有效，且未引入新错误
+- **best-effort**：修复已落地，但无法完全验证（例如依赖登录态或外部服务）
+- **reverted**：检测到回归，于是 `git revert HEAD`，并把该问题标成 `deferred`
 
-### 8e.5. Regression Test
+### 8e.5. 回归测试
 
-Skip if: classification is not "verified", OR the fix is purely visual/CSS with no JS behavior, OR no test framework was detected AND user declined bootstrap.
+若满足以下任一条件，则跳过：分类结果不是 `verified`；修复纯属视觉 / CSS 且不涉及 JS 行为；未检测到测试框架且用户拒绝 bootstrap。
 
-**1. Study the project's existing test patterns:**
+**1. 先研究项目现有测试写法：**
 
-Read 2-3 test files closest to the fix (same directory, same code type). Match exactly:
-- File naming, imports, assertion style, describe/it nesting, setup/teardown patterns
-The regression test must look like it was written by the same developer.
+读取与该修复最接近的 2-3 个测试文件（同目录、同代码类型），严格模仿它们的：
+- 文件命名
+- import 方式
+- 断言风格
+- describe / it 嵌套结构
+- setup / teardown 模式
 
-**2. Trace the bug's codepath, then write a regression test:**
+新补的回归测试看起来必须像同一位开发者写出来的。
 
-Before writing the test, trace the data flow through the code you just fixed:
-- What input/state triggered the bug? (the exact precondition)
-- What codepath did it follow? (which branches, which function calls)
-- Where did it break? (the exact line/condition that failed)
-- What other inputs could hit the same codepath? (edge cases around the fix)
+**2. 先追 bug 的代码路径，再写回归测试：**
 
-The test MUST:
-- Set up the precondition that triggered the bug (the exact state that made it break)
-- Perform the action that exposed the bug
-- Assert the correct behavior (NOT "it renders" or "it doesn't throw")
-- If you found adjacent edge cases while tracing, test those too (e.g., null input, empty array, boundary value)
-- Include full attribution comment:
+写测试之前，先把刚修过的代码路径完整追一遍：
+- 是什么输入 / 状态触发了 bug？（精确前置条件）
+- 它走的是哪条代码路径？（经过哪些分支、哪些函数）
+- 它是在哪里坏掉的？（精确到行或条件）
+- 还有哪些输入会命中同一路径？（围绕这个修复的边界情况）
+
+测试**必须**做到：
+- 搭出真正触发 bug 的前置条件
+- 执行真正暴露 bug 的动作
+- 断言正确行为（不是“能渲染”或“没抛异常”这种弱断言）
+- 如果在追路径时发现相邻边界情况，也一起测掉（例如 null 输入、空数组、边界值）
+- 带完整 attribution 注释：
   ```
   // Regression: ISSUE-NNN — {what broke}
   // Found by /qa on {YYYY-MM-DD}
   // Report: .gstack/qa-reports/qa-report-{domain}-{date}.md
   ```
 
-Test type decision:
-- Console error / JS exception / logic bug → unit or integration test
-- Broken form / API failure / data flow bug → integration test with request/response
-- Visual bug with JS behavior (broken dropdown, animation) → component test
-- Pure CSS → skip (caught by QA reruns)
+测试类型的选择规则：
+- Console error / JS exception / 逻辑 bug → unit 或 integration test
+- 表单损坏 / API 失败 / 数据流 bug → 带 request / response 的 integration test
+- 带 JS 行为的视觉 bug（如下拉、动画失效）→ component test
+- 纯 CSS → 跳过（依赖 QA 重跑兜住）
 
-Generate unit tests. Mock all external dependencies (DB, API, Redis, file system).
+生成测试时，要把所有外部依赖（DB、API、Redis、文件系统等）都 mock 掉。
 
-Use auto-incrementing names to avoid collisions: check existing `{name}.regression-*.test.{ext}` files, take max number + 1.
+测试文件命名使用自动递增编号，避免冲突：检查现有 `{name}.regression-*.test.{ext}`，取最大编号 + 1。
 
-**3. Run only the new test file:**
+**3. 只运行新写的测试文件：**
 
 ```bash
 {detected test command} {new-test-file}
 ```
 
-**4. Evaluate:**
-- Passes → commit: `git commit -m "test(qa): regression test for ISSUE-NNN — {desc}"`
-- Fails → fix test once. Still failing → delete test, defer.
-- Taking >2 min exploration → skip and defer.
+**4. 评估结果：**
+- 通过 → 提交：`git commit -m "test(qa): regression test for ISSUE-NNN — {desc}"`
+- 失败 → 最多再修一次；若仍失败，则删除该测试并标记为 deferred
+- 如果光探索就花了超过 2 分钟 → 直接跳过并 defer
 
-**5. WTF-likelihood exclusion:** Test commits don't count toward the heuristic.
+**5. WTF-likelihood 排除项：** 纯测试提交不计入该启发式。
 
-### 8f. Self-Regulation (STOP AND EVALUATE)
+### 8f. 自我调节（STOP AND EVALUATE）
 
-Every 5 fixes (or after any revert), compute the WTF-likelihood:
+每修完 5 个问题（或每发生一次 revert），都要重新计算 WTF-likelihood：
 
 ```
 WTF-LIKELIHOOD:
@@ -906,25 +911,25 @@ WTF-LIKELIHOOD:
   Touching unrelated files:   +20%
 ```
 
-**If WTF > 20%:** STOP immediately. Show the user what you've done so far. Ask whether to continue.
+**如果 WTF > 20%：** 立即停止。把你到目前为止做过的事情展示给用户，并询问是否继续。
 
-**Hard cap: 50 fixes.** After 50 fixes, stop regardless of remaining issues.
-
----
-
-## Phase 9: Final QA
-
-After all fixes are applied:
-
-1. Re-run QA on all affected pages
-2. Compute final health score
-3. **If final score is WORSE than baseline:** WARN prominently — something regressed
+**硬上限：50 个 fix。** 达到 50 个之后，无论还有多少问题，都必须停止。
 
 ---
 
-## Phase 10: Report
+## Phase 9：最终 QA
 
-Write the report to both local and project-scoped locations:
+当所有修复都完成后：
+
+1. 对所有受影响页面重新跑一遍 QA
+2. 计算最终健康分
+3. **如果最终分数比 baseline 更差：** 必须显著警告，说明出现了回归
+
+---
+
+## Phase 10：报告
+
+报告要同时写到本地路径和项目级路径：
 
 **Local:** `.gstack/qa-reports/qa-report-{domain}-{YYYY-MM-DD}.md`
 
@@ -934,36 +939,36 @@ source <(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null) && mkdir -p ~/.gst
 ```
 Write to `~/.gstack/projects/{slug}/{user}-{branch}-test-outcome-{datetime}.md`
 
-**Per-issue additions** (beyond standard report template):
-- Fix Status: verified / best-effort / reverted / deferred
-- Commit SHA (if fixed)
-- Files Changed (if fixed)
-- Before/After screenshots (if fixed)
+**每个问题额外补充的信息**（超出标准模板之外）：
+- Fix Status：verified / best-effort / reverted / deferred
+- Commit SHA（如果修了）
+- Files Changed（如果修了）
+- Before / After 截图（如果修了）
 
-**Summary section:**
-- Total issues found
-- Fixes applied (verified: X, best-effort: Y, reverted: Z)
-- Deferred issues
-- Health score delta: baseline → final
+**Summary 部分至少要有：**
+- 总问题数
+- 已应用修复数（verified: X、best-effort: Y、reverted: Z）
+- Deferred 问题数
+- 健康分变化：baseline → final
 
 **PR Summary:** Include a one-line summary suitable for PR descriptions:
 > "QA found N issues, fixed M, health score X → Y."
 
 ---
 
-## Phase 11: TODOS.md Update
+## Phase 11：更新 TODOS.md
 
-If the repo has a `TODOS.md`:
+如果仓库里有 `TODOS.md`：
 
-1. **New deferred bugs** → add as TODOs with severity, category, and repro steps
-2. **Fixed bugs that were in TODOS.md** → annotate with "Fixed by /qa on {branch}, {date}"
+1. **新增的 deferred bug** → 作为 TODO 加进去，并附上 severity、category 和复现步骤
+2. **已经在 TODOS.md 中存在、且这次修掉的 bug** → 用 "Fixed by /qa on {branch}, {date}" 做标注
 
 ---
 
-## Additional Rules (qa-specific)
+## 补充规则（qa 专属）
 
-11. **Clean working tree required.** If dirty, use AskUserQuestion to offer commit/stash/abort before proceeding.
-12. **One commit per fix.** Never bundle multiple fixes into one commit.
-13. **Only modify tests when generating regression tests in Phase 8e.5.** Never modify CI configuration. Never modify existing tests — only create new test files.
-14. **Revert on regression.** If a fix makes things worse, `git revert HEAD` immediately.
-15. **Self-regulate.** Follow the WTF-likelihood heuristic. When in doubt, stop and ask.
+11. **必须在干净工作树上运行。** 如果工作树不干净，先通过 AskUserQuestion 让用户选择 commit / stash / abort，再继续。
+12. **每个 fix 对应一个 commit。** 绝不能把多个修复合并到同一提交。
+13. **只有在 Phase 8e.5 写回归测试时才允许动测试文件。** 不要动 CI 配置；也不要修改现有测试，只允许新建测试文件。
+14. **一旦检测到回归，立刻 revert。** 如果某个修复让情况变糟，马上执行 `git revert HEAD`。
+15. **要自我调节。** 严格遵守 WTF-likelihood 启发式；拿不准就停下来问。
