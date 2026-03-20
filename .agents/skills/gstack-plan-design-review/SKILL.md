@@ -39,45 +39,40 @@ echo '{"skill":"plan-design-review","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","rep
 for _PF in ~/.gstack/analytics/.pending-*; do [ -f "$_PF" ] && ~/.codex/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true; break; done
 ```
 
-If `PROACTIVE` is `"false"`, do not proactively suggest gstack skills — only invoke
-them when the user explicitly asks. The user opted out of proactive suggestions.
+如果 `PROACTIVE` 为 `"false"`，不要主动推荐 gstack 技能，只在用户明确要求时调用。用户已经关闭了主动建议。
 
-If output shows `UPGRADE_AVAILABLE <old> <new>`: read `~/.codex/skills/gstack/gstack-upgrade/SKILL.md` and follow the "Inline upgrade flow" (auto-upgrade if configured, otherwise AskUserQuestion with 4 options, write snooze state if declined). If `JUST_UPGRADED <from> <to>`: tell user "Running gstack v{to} (just updated!)" and continue.
+如果输出为 `UPGRADE_AVAILABLE <old> <new>`：读取 `~/.codex/skills/gstack/gstack-upgrade/SKILL.md` 并按“Inline upgrade flow”执行（若已配置自动升级则直接升级，否则通过 AskUserQuestion 给出 4 个选项；若用户拒绝则写入 snooze 状态）。如果输出为 `JUST_UPGRADED <from> <to>`：告诉用户 “Running gstack v{to} (just updated!)”，然后继续。
 
-If `LAKE_INTRO` is `no`: Before continuing, introduce the Completeness Principle.
-Tell the user: "gstack follows the **Boil the Lake** principle — always do the complete
-thing when AI makes the marginal cost near-zero. Read more: https://garryslist.org/posts/boil-the-ocean"
-Then offer to open the essay in their default browser:
+如果 `LAKE_INTRO` 为 `no`：继续之前，先介绍 Completeness Principle。
+告诉用户：“gstack 遵循 **Boil the Lake** 原则：当 AI 让边际成本接近于零时，就应优先把事情做完整。详见：https://garryslist.org/posts/boil-the-ocean”
+然后询问是否要在默认浏览器中打开这篇文章：
 
 ```bash
 open https://garryslist.org/posts/boil-the-ocean
 touch ~/.gstack/.completeness-intro-seen
 ```
 
-Only run `open` if the user says yes. Always run `touch` to mark as seen. This only happens once.
+只有用户明确同意时才运行 `open`。无论如何都要运行 `touch` 将其标记为已见。这个流程只发生一次。
 
-If `TEL_PROMPTED` is `no` AND `LAKE_INTRO` is `yes`: After the lake intro is handled,
-ask the user about telemetry. Use AskUserQuestion:
+如果 `TEL_PROMPTED` 为 `no` 且 `LAKE_INTRO` 为 `yes`：在完成 lake intro 之后，向用户询问 telemetry 设置。使用 AskUserQuestion：
 
-> Help gstack get better! Community mode shares usage data (which skills you use, how long
-> they take, crash info) with a stable device ID so we can track trends and fix bugs faster.
-> No code, file paths, or repo names are ever sent.
-> Change anytime with `gstack-config set telemetry off`.
+> 帮 gstack 变得更好！Community 模式会通过稳定设备 ID 分享使用数据（你用了哪些技能、耗时多久、是否崩溃），便于我们追踪趋势并更快修 bug。
+> 不会发送任何代码、文件路径或仓库名称。
+> 你可以随时通过 `gstack-config set telemetry off` 关闭。
 
 Options:
-- A) Help gstack get better! (recommended)
-- B) No thanks
+- A) 帮 gstack 变得更好！（推荐）
+- B) 不，谢谢
 
 If A: run `~/.codex/skills/gstack/bin/gstack-config set telemetry community`
 
 If B: ask a follow-up AskUserQuestion:
 
-> How about anonymous mode? We just learn that *someone* used gstack — no unique ID,
-> no way to connect sessions. Just a counter that helps us know if anyone's out there.
+> 那匿名模式呢？我们只知道“有人”用了 gstack，没有唯一 ID，也无法串联会话，只是一个帮助我们了解使用量的计数。
 
 Options:
-- A) Sure, anonymous is fine
-- B) No thanks, fully off
+- A) 可以，匿名模式没问题
+- B) 不，谢谢，完全关闭
 
 If B→A: run `~/.codex/skills/gstack/bin/gstack-config set telemetry anonymous`
 If B→B: run `~/.codex/skills/gstack/bin/gstack-config set telemetry off`
@@ -87,65 +82,65 @@ Always run:
 touch ~/.gstack/.telemetry-prompted
 ```
 
-This only happens once. If `TEL_PROMPTED` is `yes`, skip this entirely.
+这个流程只发生一次。如果 `TEL_PROMPTED` 已经是 `yes`，则完全跳过。
 
-## AskUserQuestion Format
+## AskUserQuestion 格式
 
-**ALWAYS follow this structure for every AskUserQuestion call:**
-1. **Re-ground:** State the project, the current branch (use the `_BRANCH` value printed by the preamble — NOT any branch from conversation history or gitStatus), and the current plan/task. (1-2 sentences)
-2. **Simplify:** Explain the problem in plain English a smart 16-year-old could follow. No raw function names, no internal jargon, no implementation details. Use concrete examples and analogies. Say what it DOES, not what it's called.
-3. **Recommend:** `RECOMMENDATION: Choose [X] because [one-line reason]` — always prefer the complete option over shortcuts (see Completeness Principle). Include `Completeness: X/10` for each option. Calibration: 10 = complete implementation (all edge cases, full coverage), 7 = covers happy path but skips some edges, 3 = shortcut that defers significant work. If both options are 8+, pick the higher; if one is ≤5, flag it.
-4. **Options:** Lettered options: `A) ... B) ... C) ...` — when an option involves effort, show both scales: `(human: ~X / CC: ~Y)`
+**每次调用 AskUserQuestion 都必须遵循以下结构：**
+1. **重新锚定上下文：** 说明当前项目、当前分支（使用前言中输出的 `_BRANCH`，不要使用对话历史或 gitStatus 中的其他分支名）以及当前任务。（1-2 句）
+2. **通俗解释：** 用一个聪明的 16 岁用户也能看懂的语言解释问题。不要直接抛函数名、内部术语或实现细节。多用具体例子和类比。强调“它会做什么”，而不是“它叫什么”。
+3. **给出推荐：** 使用 `RECOMMENDATION: Choose [X] because [one-line reason]`。始终优先推荐完整方案而不是捷径（见 Completeness Principle）。每个选项都要带 `Completeness: X/10`。标尺：10 = 完整实现（边界条件和覆盖都齐全），7 = happy path 足够但跳过部分边缘情况，3 = 明显延期的重要工作。如果两个选项都在 8 分以上，选更高的；如果某个选项 ≤5，要明确指出。
+4. **列出选项：** 使用字母选项 `A) ... B) ... C) ...`。只要涉及工作量，就同时给人工团队与 CC 的估时：`(human: ~X / CC: ~Y)`
 
-Assume the user hasn't looked at this window in 20 minutes and doesn't have the code open. If you'd need to read the source to understand your own explanation, it's too complex.
+默认假设用户已经有 20 分钟没看这个窗口，也没有把代码打开。如果你的解释必须依赖“先去读源码才能看懂”，那说明写得还不够清楚。
 
-Per-skill instructions may add additional formatting rules on top of this baseline.
+各技能可以在此基础上再叠加自己的格式要求。
 
 ## Completeness Principle — Boil the Lake
 
-AI-assisted coding makes the marginal cost of completeness near-zero. When you present options:
+AI 辅助编码让“把事情做完整”的边际成本接近于零。因此在给用户呈现选项时：
 
-- If Option A is the complete implementation (full parity, all edge cases, 100% coverage) and Option B is a shortcut that saves modest effort — **always recommend A**. The delta between 80 lines and 150 lines is meaningless with CC+gstack. "Good enough" is the wrong instinct when "complete" costs minutes more.
-- **Lake vs. ocean:** A "lake" is boilable — 100% test coverage for a module, full feature implementation, handling all edge cases, complete error paths. An "ocean" is not — rewriting an entire system from scratch, adding features to dependencies you don't control, multi-quarter platform migrations. Recommend boiling lakes. Flag oceans as out of scope.
-- **When estimating effort**, always show both scales: human team time and CC+gstack time. The compression ratio varies by task type — use this reference:
+- 如果 A 是完整实现（完整对齐、覆盖全部边界情况、测试齐全），B 只是为了省一点点工作量的捷径，**永远推荐 A**。在 CC+gstack 场景下，80 行和 150 行代码的差距几乎没有意义。“差不多够用”不是正确本能。
+- **湖与海：** “湖”是可以被煮沸的，例如某个模块 100% 测试覆盖、一个功能的完整实现、边界情况和错误路径补齐；“海”则不是，例如重写整个系统、给不可控依赖新增能力、跨多个季度的平台迁移。推荐把湖做完，把海明确标成超出范围。
+- **估算工作量时**，一定同时给出人工团队时间和 CC+gstack 时间。可参考下表：
 
-| Task type | Human team | CC+gstack | Compression |
-|-----------|-----------|-----------|-------------|
-| Boilerplate / scaffolding | 2 days | 15 min | ~100x |
-| Test writing | 1 day | 15 min | ~50x |
-| Feature implementation | 1 week | 30 min | ~30x |
-| Bug fix + regression test | 4 hours | 15 min | ~20x |
-| Architecture / design | 2 days | 4 hours | ~5x |
-| Research / exploration | 1 day | 3 hours | ~3x |
+| 任务类型 | 人工团队 | CC+gstack | 压缩倍数 |
+|----------|----------|------------|----------|
+| 脚手架 / 样板代码 | 2 天 | 15 分钟 | ~100x |
+| 编写测试 | 1 天 | 15 分钟 | ~50x |
+| 功能实现 | 1 周 | 30 分钟 | ~30x |
+| 修 bug + 回归测试 | 4 小时 | 15 分钟 | ~20x |
+| 架构 / 设计 | 2 天 | 4 小时 | ~5x |
+| 调研 / 探索 | 1 天 | 3 小时 | ~3x |
 
-- This principle applies to test coverage, error handling, documentation, edge cases, and feature completeness. Don't skip the last 10% to "save time" — with AI, that 10% costs seconds.
+- 这个原则适用于测试覆盖、错误处理、文档、边界情况和功能完整性。不要为了“省时间”而故意跳过最后 10%；在 AI 协助下，那 10% 往往只多花几分钟。
 
-**Anti-patterns — DON'T do this:**
-- BAD: "Choose B — it covers 90% of the value with less code." (If A is only 70 lines more, choose A.)
-- BAD: "We can skip edge case handling to save time." (Edge case handling costs minutes with CC.)
-- BAD: "Let's defer test coverage to a follow-up PR." (Tests are the cheapest lake to boil.)
-- BAD: Quoting only human-team effort: "This would take 2 weeks." (Say: "2 weeks human / ~1 hour CC.")
+**反模式：不要这样做**
+- BAD: “选 B 吧，它用更少代码就覆盖了 90% 的价值。”（如果 A 只多几十行，就该选 A）
+- BAD: “先不处理边界情况，节省时间。”（在 CC 场景下，补边界情况通常只要几分钟）
+- BAD: “测试覆盖等后续 PR 再补。”（测试通常是最值得顺手做完的“湖”）
+- BAD: 只报人工团队工期：“这个大概要 2 周。”（应写成 “人工约 2 周 / CC 约 1 小时”）
 
 ## Contributor Mode
 
-If `_CONTRIB` is `true`: you are in **contributor mode**. You're a gstack user who also helps make it better.
+如果 `_CONTRIB` 为 `true`：表示你当前处于 **contributor mode**。你既是 gstack 的使用者，也是在帮助它变得更好。
 
-**At the end of each major workflow step** (not after every single command), reflect on the gstack tooling you used. Rate your experience 0 to 10. If it wasn't a 10, think about why. If there is an obvious, actionable bug OR an insightful, interesting thing that could have been done better by gstack code or skill markdown — file a field report. Maybe our contributor will help make us better!
+**在每个主要工作流阶段结束时**（不是每个命令之后），都回顾一下你刚刚使用的 gstack 工具体验，并给出 0 到 10 分。如果不是 10 分，想想原因。如果这里存在一个明显、可操作的 bug，或者 gstack 的代码 / 技能 markdown 本可以做得更好，而且这个点有启发意义，就提交一份 field report。
 
-**Calibration — this is the bar:** For example, `$B js "await fetch(...)"` used to fail with `SyntaxError: await is only valid in async functions` because gstack didn't wrap expressions in async context. Small, but the input was reasonable and gstack should have handled it — that's the kind of thing worth filing. Things less consequential than this, ignore.
+**校准标准：** 例如，过去 `$B js "await fetch(...)"` 会因为 gstack 没有自动把表达式包进 async 上下文，而报 `SyntaxError: await is only valid in async functions`。这类问题虽然小，但用户输入是合理的，gstack 本应处理好，这就值得记录。比这更轻微、影响更小的事情就不要报。
 
-**NOT worth filing:** user's app bugs, network errors to user's URL, auth failures on user's site, user's own JS logic bugs.
+**不值得记录的内容：** 用户自己应用的 bug、用户站点的网络错误、用户站点的登录失败、用户自身的 JS 逻辑错误。
 
-**To file:** write `~/.gstack/contributor-logs/{slug}.md` with **all sections below** (do not truncate — include every section through the Date/Version footer):
+**提交方式：** 向 `~/.gstack/contributor-logs/{slug}.md` 写入**下列全部章节**（不要截断，必须写到最后的 Date / Version footer）：
 
 ```
 # {Title}
 
-Hey gstack team — ran into this while using /{skill-name}:
+Hey gstack team — 我在使用 /{skill-name} 时遇到了这个问题：
 
-**What I was trying to do:** {what the user/agent was attempting}
-**What happened instead:** {what actually happened}
-**My rating:** {0-10} — {one sentence on why it wasn't a 10}
+**What I was trying to do:** {用户 / 代理原本想做什么}
+**What happened instead:** {实际发生了什么}
+**My rating:** {0-10} — {一句话说明为什么它不是 10 分}
 
 ## Steps to reproduce
 1. {step}
@@ -156,31 +151,31 @@ Hey gstack team — ran into this while using /{skill-name}:
 ```
 
 ## What would make this a 10
-{one sentence: what gstack should have done differently}
+{一句话：gstack 本应怎样做才算更好}
 
 **Date:** {YYYY-MM-DD} | **Version:** {gstack version} | **Skill:** /{skill}
 ```
 
-Slug: lowercase, hyphens, max 60 chars (e.g. `browse-js-no-await`). Skip if file already exists. Max 3 reports per session. File inline and continue — don't stop the workflow. Tell user: "Filed gstack field report: {title}"
+Slug 规则：小写、用连字符、最长 60 个字符（例如 `browse-js-no-await`）。如果文件已存在则跳过。每个 session 最多写 3 份报告。就地写入并继续流程，不要因此中断。随后告诉用户：“Filed gstack field report: {title}”
 
 ## Completion Status Protocol
 
-When completing a skill workflow, report status using one of:
-- **DONE** — All steps completed successfully. Evidence provided for each claim.
-- **DONE_WITH_CONCERNS** — Completed, but with issues the user should know about. List each concern.
-- **BLOCKED** — Cannot proceed. State what is blocking and what was tried.
-- **NEEDS_CONTEXT** — Missing information required to continue. State exactly what you need.
+当一个技能工作流结束时，必须使用以下状态之一汇报结果：
+- **DONE** — 所有步骤均成功完成，且每个关键结论都有证据支撑。
+- **DONE_WITH_CONCERNS** — 已完成，但存在用户需要知道的风险或问题。逐条列出。
+- **BLOCKED** — 无法继续。明确说明阻塞点以及你已经尝试过什么。
+- **NEEDS_CONTEXT** — 缺少继续所需的信息。明确指出具体缺什么。
 
-### Escalation
+### 升级 / 求助
 
-It is always OK to stop and say "this is too hard for me" or "I'm not confident in this result."
+任何时候，如果你判断“这件事超出我当前把握”或“我对结果没有信心”，都可以停下来明确升级。
 
-Bad work is worse than no work. You will not be penalized for escalating.
-- If you have attempted a task 3 times without success, STOP and escalate.
-- If you are uncertain about a security-sensitive change, STOP and escalate.
-- If the scope of work exceeds what you can verify, STOP and escalate.
+做出糟糕结果，比承认做不到更糟。
+- 如果同一任务已经尝试 3 次仍然失败，立即停止并升级。
+- 如果涉及安全敏感改动且你不能确认正确性，立即停止并升级。
+- 如果工作范围已经超出你能验证的边界，立即停止并升级。
 
-Escalation format:
+升级格式：
 ```
 STATUS: BLOCKED | NEEDS_CONTEXT
 REASON: [1-2 sentences]
@@ -188,19 +183,16 @@ ATTEMPTED: [what you tried]
 RECOMMENDATION: [what the user should do next]
 ```
 
-## Telemetry (run last)
+## Telemetry（最后执行）
 
-After the skill workflow completes (success, error, or abort), log the telemetry event.
-Determine the skill name from the `name:` field in this file's YAML frontmatter.
-Determine the outcome from the workflow result (success if completed normally, error
-if it failed, abort if the user interrupted).
+在技能工作流结束后（无论成功、失败还是中止），都要记录 telemetry 事件。
+技能名称取自本文件 YAML frontmatter 中的 `name:` 字段。
+结果状态取自工作流最终结果：正常完成为 success，失败为 error，用户中断为 abort。
 
-**PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes telemetry to
-`~/.gstack/analytics/` (user config directory, not project files). The skill
-preamble already writes to the same directory — this is the same pattern.
-Skipping this command loses session duration and outcome data.
+**PLAN MODE 例外：这一段也必须执行。** 该命令写入的是
+`~/.gstack/analytics/`（用户配置目录，而不是项目文件）。技能前言本来也在写同一目录，因此这属于一致模式。跳过它会丢失 session 时长和结果信息。
 
-Run this bash:
+执行以下 bash：
 
 ```bash
 _TEL_END=$(date +%s)
@@ -211,27 +203,23 @@ rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
   --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
 ```
 
-Replace `SKILL_NAME` with the actual skill name from frontmatter, `OUTCOME` with
-success/error/abort, and `USED_BROWSE` with true/false based on whether `$B` was used.
-If you cannot determine the outcome, use "unknown". This runs in the background and
-never blocks the user.
+将 `SKILL_NAME` 替换为 frontmatter 中的真实技能名，将 `OUTCOME` 替换为 success / error / abort，并根据是否用过 `$B` 将 `USED_BROWSE` 填为 true / false。
+如果无法判断结果状态，则使用 "unknown"。这条命令在后台执行，不应阻塞用户。
 
-## Step 0: Detect base branch
+## Step 0：检测基线分支
 
-Determine which branch this PR targets. Use the result as "the base branch" in all subsequent steps.
+先确定当前 PR 的目标分支。后续所有步骤里提到“基线分支”时，都使用这里检测出的结果。
 
-1. Check if a PR already exists for this branch:
+1. 先检查当前分支是否已经有对应 PR：
    `gh pr view --json baseRefName -q .baseRefName`
-   If this succeeds, use the printed branch name as the base branch.
+   如果成功，就使用输出的分支名作为基线分支。
 
-2. If no PR exists (command fails), detect the repo's default branch:
+2. 如果还没有 PR（命令失败），则检测仓库默认分支：
    `gh repo view --json defaultBranchRef -q .defaultBranchRef.name`
 
-3. If both commands fail, fall back to `main`.
+3. 如果两个命令都失败，则回退到 `main`。
 
-Print the detected base branch name. In every subsequent `git diff`, `git log`,
-`git fetch`, `git merge`, and `gh pr create` command, substitute the detected
-branch name wherever the instructions say "the base branch."
+打印检测出的基线分支名。后续所有 `git diff`、`git log`、`git fetch`、`git merge` 和 `gh pr create` 命令里，只要说明文字写到“基线分支”，都替换成这里检测出的分支名。
 
 ---
 
