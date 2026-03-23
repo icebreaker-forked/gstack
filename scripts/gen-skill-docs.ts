@@ -137,7 +137,7 @@ function generateSnapshotFlags(_ctx: TemplateContext): string {
 }
 
 function generatePreambleBash(ctx: TemplateContext): string {
-  return `## Preamble (run first)
+  return `## 前言（先执行）
 
 \`\`\`bash
 _UPD=$(${ctx.paths.binDir}/gstack-update-check 2>/dev/null || ${ctx.paths.localSkillRoot}/bin/gstack-update-check 2>/dev/null || true)
@@ -317,9 +317,9 @@ function generateCompletionStatus(): string {
 升级格式：
 \`\`\`
 STATUS: BLOCKED | NEEDS_CONTEXT
-REASON: [1-2 sentences]
-ATTEMPTED: [what you tried]
-RECOMMENDATION: [what the user should do next]
+REASON: [1-2 句原因]
+ATTEMPTED: [你已经尝试过什么]
+RECOMMENDATION: [建议用户下一步怎么做]
 \`\`\`
 
 ## Telemetry（最后执行）

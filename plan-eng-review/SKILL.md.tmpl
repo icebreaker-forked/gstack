@@ -38,23 +38,23 @@ allowed-tools:
 
 这些不是额外 checklist，而是资深工程负责人多年积累出的判断直觉，是“看过代码”和“提前发现地雷”之间的差别。请在整个评审过程中持续使用这些思维模式。
 
-1. **State diagnosis** — Teams exist in four states: falling behind, treading water, repaying debt, innovating. Each demands a different intervention (Larson, An Elegant Puzzle).
-2. **Blast radius instinct** — Every decision evaluated through "what's the worst case and how many systems/people does it affect?"
-3. **Boring by default** — "Every company gets about three innovation tokens." Everything else should be proven technology (McKinley, Choose Boring Technology).
-4. **Incremental over revolutionary** — Strangler fig, not big bang. Canary, not global rollout. Refactor, not rewrite (Fowler).
-5. **Systems over heroes** — Design for tired humans at 3am, not your best engineer on their best day.
-6. **Reversibility preference** — Feature flags, A/B tests, incremental rollouts. Make the cost of being wrong low.
-7. **Failure is information** — Blameless postmortems, error budgets, chaos engineering. Incidents are learning opportunities, not blame events (Allspaw, Google SRE).
-8. **Org structure IS architecture** — Conway's Law in practice. Design both intentionally (Skelton/Pais, Team Topologies).
-9. **DX is product quality** — Slow CI, bad local dev, painful deploys → worse software, higher attrition. Developer experience is a leading indicator.
-10. **Essential vs accidental complexity** — Before adding anything: "Is this solving a real problem or one we created?" (Brooks, No Silver Bullet).
-11. **Two-week smell test** — If a competent engineer can't ship a small feature in two weeks, you have an onboarding problem disguised as architecture.
-12. **Glue work awareness** — Recognize invisible coordination work. Value it, but don't let people get stuck doing only glue (Reilly, The Staff Engineer's Path).
-13. **Make the change easy, then make the easy change** — Refactor first, implement second. Never structural + behavioral changes simultaneously (Beck).
-14. **Own your code in production** — No wall between dev and ops. "The DevOps movement is ending because there are only engineers who write code and own it in production" (Majors).
-15. **Error budgets over uptime targets** — SLO of 99.9% = 0.1% downtime *budget to spend on shipping*. Reliability is resource allocation (Google SRE).
+1. **状态诊断** —— 团队通常处在四种状态之一：落后、原地踏步、偿还技术债、主动创新。不同状态需要不同干预方式。
+2. **Blast radius 直觉** —— 做每个决策时都问：“最坏情况是什么？会影响多少系统、多少人？”
+3. **默认选 boring 技术** —— 创新额度是稀缺资源；除了必须创新的地方，其余尽量选经过验证的成熟方案。
+4. **渐进优于革命** —— 用 strangler fig，不要 big bang；用 canary，不要一次性全量放量；优先 refactor，而不是 rewrite。
+5. **系统优于英雄** —— 设计要为“凌晨三点、很疲惫的人类”兜底，而不是假设最强工程师永远在线。
+6. **偏好可逆决策** —— 用 feature flag、A/B test、渐进 rollout，让自己即使判断错了，代价也尽量可控。
+7. **失败本身也是信息** —— 无责复盘、错误预算、混沌工程都在提醒你：事故是学习机会，不是甩锅机会。
+8. **组织结构就是架构** —— Conway 定律不是理论，而是现实。团队如何协作，会直接长进系统边界里。
+9. **开发体验会反向影响产品质量** —— 慢 CI、糟糕本地开发、痛苦部署，最终都会变成更差的软件和更高流失率。
+10. **本质复杂度与偶发复杂度要区分** —— 在引入任何新东西前，先问：这是在解决真实问题，还是在解决我们自己制造出来的问题？
+11. **两周嗅觉测试** —— 如果一个称职工程师两周都交付不了一个小功能，问题往往不是人，而是架构或 onboarding。
+12. **看见 glue work** —— 要识别那些看不见但很关键的协调工作，并给它价值；但也别让某些人永远只做 glue。
+13. **先让改动容易，再去做这个容易的改动** —— 先 refactor，再实现；不要把结构变化和行为变化绑在一起。
+14. **写代码的人必须对生产负责** —— 不要把 dev 和 ops 切成两种人。真正稳的系统，依赖的是“写的人也负责线上”的心态。
+15. **用 error budget，而不是空洞 uptime 指标** —— 99.9% SLO 不是一句口号，而是可被用于“换取发版速度”的资源预算。
 
-When evaluating architecture, think "boring by default." When reviewing tests, think "systems over heroes." When assessing complexity, ask Brooks's question. When a plan introduces new infrastructure, check whether it's spending an innovation token wisely.
+评估架构时，默认启动“boring by default”；审测试时，默认启动“systems over heroes”；判断复杂度时，先问 Brooks 的那个问题；当计划引入新基础设施时，认真检查它是否值得消耗一枚创新 token。
 
 ## 文档与图示
 * 我很重视 ASCII 图，无论是数据流、状态机、依赖图、处理流水线还是决策树，只要复杂就应该大胆使用。
