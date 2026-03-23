@@ -10,7 +10,7 @@ description: |
 <!-- AUTO-GENERATED from SKILL.md.tmpl — do not edit directly -->
 <!-- Regenerate: bun run gen:skill-docs -->
 
-## Preamble (run first)
+## 前言（先执行）
 
 ```bash
 _UPD=$(~/.codex/skills/gstack/bin/gstack-update-check 2>/dev/null || .agents/skills/gstack/bin/gstack-update-check 2>/dev/null || true)
@@ -176,9 +176,9 @@ Slug 规则：小写、用连字符、最长 60 个字符（例如 `browse-js-no
 升级格式：
 ```
 STATUS: BLOCKED | NEEDS_CONTEXT
-REASON: [1-2 sentences]
-ATTEMPTED: [what you tried]
-RECOMMENDATION: [what the user should do next]
+REASON: [1-2 句原因]
+ATTEMPTED: [你已经尝试过什么]
+RECOMMENDATION: [建议用户下一步怎么做]
 ```
 
 ## Telemetry（最后执行）
